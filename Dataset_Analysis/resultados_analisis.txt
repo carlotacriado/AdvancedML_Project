@@ -1,0 +1,40 @@
+---- Analysis of the distribution of the evolutionary chain ----
+
+## Summary per Evolutionary Rol
+| evolution_role                 |   count |
+|:-------------------------------|--------:|
+| last Link (Just Pre-Evolves)   |     236 |
+| First Link (Just Evolves)      |     232 |
+| No Evolution                   |      97 |
+| Intermediate Link (Pre & Post) |      83 |
+
+Total of Pokémon that are **Part of an Evolutionary Task (have 'evolution'):** 315
+
+## Tasks Distribution per generation
+| generation     |   First Link (Just Evolves) |   Intermediate Link (Pre & Post) |   No Evolution |   last Link (Just Pre-Evolves) |
+|:---------------|----------------------------:|---------------------------------:|---------------:|-------------------------------:|       
+| generation-i   |                          57 |                               28 |             11 |                             55 |       
+| generation-ii  |                          41 |                               11 |             12 |                             35 |       
+| generation-iii |                          45 |                               18 |             28 |                             44 |       
+| generation-iv  |                          34 |                                6 |             18 |                             49 |       
+| generation-v   |                          55 |                               20 |             28 |                             53 |       
+
+Total number of unique evolutionary chain (Approximated): 232
+
+Examples of First Link (Starting point):
+['Bulbasaur', 'Charmander', 'Squirtle', 'Caterpie', 'Weedle', 'Pidgey', 'Rattata', 'Spearow', 'Ekans', 'Sandshrew']
+
+## Analysis of the number of images per Pokemon
+Unique values in 'num_of_images': [15 11  8  6  2]
+ATENTION: The number of images varies --> Revise for Meta-Learning
+CSV cargado con 648 Pokémon.
+Se encontraron 649 elementos en la carpeta de imágenes.
+--- Iniciando Emparejamiento ---
+Mapa creado. Se identificaron 649 carpetas válidas con ID.
+
+✅ Pokémon encontrados correctamente: 648
+❌ Pokémon sin carpeta: 0
+
+🎉 ¡ÉXITO! Todos los Pokémon del CSV tienen su carpeta asignada.
+
+💾 Se ha guardado un nuevo archivo 'pokemon_data_linked.csv' con la columna 'folder_name' correcta.
