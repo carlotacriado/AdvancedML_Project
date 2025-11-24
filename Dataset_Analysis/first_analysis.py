@@ -132,3 +132,4 @@ else:
 if len(found) > 0:
     df.to_csv("pokemon_data_linked.csv", index=False)
     print("\n💾 Se ha guardado un nuevo archivo 'pokemon_data_linked.csv' con la columna 'folder_name' correcta.")
+
