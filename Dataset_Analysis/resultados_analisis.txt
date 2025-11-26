@@ -24,6 +24,8 @@ Total number of unique evolutionary chain (Approximated): 232
 Examples of First Link (Starting point):
 ['Bulbasaur', 'Charmander', 'Squirtle', 'Caterpie', 'Weedle', 'Pidgey', 'Rattata', 'Spearow', 'Ekans', 'Sandshrew']
 
+
+--- ANALISIS NUMERO DE SPRITES POR POKEMON ---
 ## Analysis of the number of images per Pokemon
 Unique values in 'num_of_images': [15 11  8  6  2]
 ATENTION: The number of images varies --> Revise for Meta-Learning
@@ -38,3 +40,12 @@ Mapa creado. Se identificaron 649 carpetas válidas con ID.
 🎉 ¡ÉXITO! Todos los Pokémon del CSV tienen su carpeta asignada.
 
 💾 Se ha guardado un nuevo archivo 'pokemon_data_linked.csv' con la columna 'folder_name' correcta.
+
+--- ANALISIS POR TIPOS --- 
+    HeatMap guardado en mi carpeta como "heatmap_tipos.png"
+
+--- ANALISIS DE TAMAÑO DE IMAGEN ---
+--- RESULTADO (648 imágenes analizadas) ---
+❌ NO. Tienen tamaños diferentes.
+Variedad encontrada: 6 tamaños distintos.
+Ejemplos (Ancho x Alto): [(96, 96), (80, 80), (64, 64), (48, 48), (56, 56)]

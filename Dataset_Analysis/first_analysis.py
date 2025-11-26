@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import os
+import seaborn as sns
 
 # Dataset
 df = pd.read_csv(r"C:\Users\Administrator\OneDrive\Escritorio\IA\Curso 4\Advanced ML\Project Rep\AdvancedML_Project\AdvancedML_Project\pokemon_data_gen1-5.csv")
@@ -133,3 +134,115 @@ if len(found) > 0:
     df.to_csv("pokemon_data_linked.csv", index=False)
     print("\n💾 Se ha guardado un nuevo archivo 'pokemon_data_linked.csv' con la columna 'folder_name' correcta.")
 
+
+# ANALISIS POR TIPOS
+try:
+    df = pd.read_csv("pokemon_data_linked.csv")
+    
+    # 1. Mapeo: Usamos etiquetas descriptivas para que el análisis de texto posterior funcione
+    gen_map = {
+        'generation-i': 'Gen 1', 
+        'generation-ii': 'Gen 2', 
+        'generation-iii': 'Gen 3', 
+        'generation-iv': 'Gen 4', 
+        'generation-v': 'Gen 5'
+    }
+    df['gen_short'] = df['generation'].map(gen_map)
+
+except FileNotFoundError:
+    print("❌ No encuentro 'pokemon_data_linked.csv'. Asegúrate de haber ejecutado el paso anterior.")
+    exit()
+
+print("--- � Análisis de Distribución de Tipos ---")
+
+# 2. Procesar Tipos
+type1 = df[['gen_short', 'type_1']].rename(columns={'type_1': 'type'})
+type2 = df[['gen_short', 'type_2']].rename(columns={'type_2': 'type'}).dropna()
+all_types_df = pd.concat([type1, type2])
+
+# 3. Crear Tabla de Contingencia
+type_pivot = pd.crosstab(all_types_df['type'], all_types_df['gen_short'])
+
+# 4. Reordenar columnas (CRUCIAL: Deben coincidir exactamente con los valores de gen_map)
+col_order = ['Gen 1', 'Gen 2', 'Gen 3', 'Gen 4', 'Gen 5']
+type_pivot = type_pivot.reindex(columns=col_order)
+
+# 5. Visualización y GUARDADO
+plt.figure(figsize=(12, 10))
+sns.heatmap(type_pivot, annot=True, fmt='d', cmap='YlGnBu', linewidths=.5)
+
+plt.title('Frecuencia de Tipos por Generación', fontsize=16)
+plt.xlabel('Conjunto de Datos (Generación)', fontsize=12)
+plt.ylabel('Tipo Elemental', fontsize=12)
+
+# --- AQUÍ ESTÁ EL GUARDADO ---
+plt.savefig("heatmap_tipos.png", dpi=300, bbox_inches='tight')
+print("✅ Gráfico guardado como 'heatmap_tipos.png'")
+
+# plt.show() # Puedes comentar esto si no quieres que se abra la ventana
+
+# 6. Análisis Numérico de Desbalance
+print("\n## ⚠️ Detección de Tipos Raros en Test (Gen 5)")
+
+# Nota: Esto requiere que el nombre de la columna contenga la palabra "Test" o "Train"
+test_types = all_types_df[all_types_df['gen_short'].str.contains('Test', na=False)]['type'].value_counts()
+train_types = all_types_df[all_types_df['gen_short'].str.contains('Train', na=False)]['type'].value_counts()
+
+for t in test_types.index:
+    count_train = train_types.get(t, 0)
+    count_test = test_types.get(t, 0)
+    
+    if count_train < 10:
+        print(f"⚠️ ALERTA: El tipo '{t}' aparece {count_test} veces en Test, pero solo {count_train} veces en todo el Train set.")
+        print(f"   -> El modelo podría tener dificultades para reconocer características de '{t}'.")
+
+print("\nAnálisis completado.")
+
+
+# ANALISIS DE TAMAÑOS
+import os
+import pandas as pd
+from PIL import Image
+
+# --- CONFIGURA ESTAS RUTAS ---
+ROOT_IMG_DIR = r"C:\Users\Administrator\OneDrive\Escritorio\IA\Curso 4\Advanced ML\Project Rep\AdvancedML_Project\AdvancedML_Project\pokemon_sprites"
+CSV_PATH = "pokemon_data_linked.csv"
+
+# 1. Cargar datos
+try:
+    df = pd.read_csv(CSV_PATH)
+except:
+    print("❌ No se encuentra el CSV.")
+    exit()
+
+print("Verificando tamaños...")
+
+unique_sizes = set()
+count = 0
+
+# 2. Revisar una imagen por cada Pokémon
+for idx, row in df.iterrows():
+    folder_path = os.path.join(ROOT_IMG_DIR, row['folder_name'])
+    
+    if os.path.exists(folder_path):
+        # Buscar la primera imagen que pille
+        files = os.listdir(folder_path)
+        images = [f for f in files if f.endswith(('.png', '.jpg'))]
+        
+        if images:
+            img_path = os.path.join(folder_path, images[0])
+            with Image.open(img_path) as img:
+                unique_sizes.add(img.size) # Guarda (ancho, alto)
+                count += 1
+
+# 3. Resultado Final
+print(f"\n--- RESULTADO ({count} imágenes analizadas) ---")
+
+if len(unique_sizes) == 1:
+    width, height = unique_sizes.pop()
+    print(f"✅ SÍ. Todas son iguales.")
+    print(f"� Tamaño: {width} x {height} píxeles.")
+else:
+    print(f"❌ NO. Tienen tamaños diferentes.")
+    print(f"Variedad encontrada: {len(unique_sizes)} tamaños distintos.")
+    print(f"Ejemplos (Ancho x Alto): {list(unique_sizes)[:5]}")
