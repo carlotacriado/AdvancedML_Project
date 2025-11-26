@@ -25,115 +25,104 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.append(project_root)
 
-from utils import utils
-from utils import globals
-
+from utils.utils import *
+from utils.globals import *
+from Baseline import *
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# THE PARTY BEGINS
-np.random.seed(0)
-example_task = utils.create_task(num_support=3, num_query=3)
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import copy
 
-example_task.inspect(summarise=False)
+# --- HYPERPARAMETERS ---
+META_LR = 1e-3       # Outer loop learning rate (Adam)
+INNER_LR = 0.01      # Inner loop learning rate (SGD usually works well for inner)
+INNER_STEPS = 5      # How many steps to train on support set
+EPSILON = 0.1        # Reptile step size (Soft update)
 
-### META-TEST SET generation:
+# --- SETUP ---
+meta_model = ConvBackbone().to(device)
+meta_optimizer = optim.Adam(meta_model.parameters(), lr=META_LR)
+criterion = nn.CrossEntropyLoss()
 
-# for our meta test set, we generate 15 different few-shot tasks
-# from the classes in our 'meta test classes' set.
-# note that none of these are available during training!
+# --- TRAINING LOOP ---
+print("Starting Reptile Meta-Training...")
 
-NUM_TEST_TASKS = 15  # number of random meta-test tasks to create
-
-np.random.seed(1)
-meta_test_tasks = [utils.create_task(num_support = globals.SUPPORT_SIZE,    # only 6 examples per class!
-                               num_query = globals.QUERY_SIZE,
-                               task_name = f'Meta-test task #{t}',
-                               meta_test=True) 
-                   for t in range(NUM_TEST_TASKS)]
-
-
-meta_test_task_classes = []
-for t, task in enumerate(meta_test_tasks):
-    task.inspect(summarise=True) # this time, they are single-row summaries
-    meta_test_task_classes.append(tuple([str(c) for c in task.classes]))
+# Iterate over the DataLoader (which generates episodes automatically)
+for batch_idx, (images, _) in enumerate(tqdm(train_loader)):
     
-max_episodes = 1000          # Increased for more convergence time
-meta_evaluate_interval = 50
-
-epsilon = 1e-1 #the value that tells us how much of the finetune model affect the metamodel
-
-# initialise your metamodel:
-meta_model = ConvBackbone() 
-
-# Outer loop optimizer (RepTile update)
-meta_lr = 1e-1 # HIGH meta-learning rate
-meta_opt = torch.optim.Adam(meta_model.parameters(), lr=meta_lr) 
-# and use this to track its metrics on the query sets across meta-training:
-meta_metrics = TrainingMetrics(meta=True) 
-
-# iterate across meta-training episodes:
-for m in tqdm(range(max_episodes)):
-
-    # A. Sample a task from the task distribution.
-    task = create_task(num_support = SUPPORT_SIZE, num_query = QUERY_SIZE)
-
-    # B. Fine-tune the model on this task. 
+    # 1. PREPARE DATA
+    # Reshape: [N_way, K_shot + Q_query, C, H, W]
+    p, k, q = 5, SUPPORT_SIZE, QUERY_SIZE
+    images = images.to(device)
     
-    # Save the original weights (theta)
-    theta = {name: param.clone().detach() for name, param in meta_model.named_parameters()}
+    # View as [5, K+Q, C, H, W]
+    # Note: Using labels from DataLoader is tricky because they are global indices.
+    # In Meta-learning, we usually re-label them 0..N-1 for the current episode.
     
-    # Initialize a task-specific backbone from the meta-model's current state
-    task_backbone = ConvBackbone()
-    task_backbone.load_state_dict(meta_model.state_dict())
-    
-    # Perform inner-loop fine-tuning (this updates task_backbone to theta')
-    task_metrics, task_head = finetune_backbone_on_task(task_backbone, task, 
-                                                       progress_bar=False, 
-                                                       plot=False, 
-                                                       lr=FT_LR, 
-                                                       l2_reg=FT_L2)
-    
-    # C. Update the meta-model (theta) towards the fine-tuned model (theta')
-    meta_opt.zero_grad()
-    
-    # Calculate the pseudo-gradient (theta - theta') for each parameter
-    with torch.no_grad():
-        for name, param in meta_model.named_parameters():
-            # Get theta' (the fine-tuned weights)
-            theta_prime = task_backbone.state_dict()[name]
-            # Calculate pseudo-gradient: (theta - theta')
-            pseudo_grad = epsilon * (theta[name] - theta_prime) 
-            # Apply the pseudo-gradient to the meta-model's parameter
-            param.grad = pseudo_grad 
+    data = images.view(p, k + q, 3, 84, 84)
 
-    # Apply the meta-model's outer loop update
-    meta_opt.step()
-
-    # Log the performance on the query set of the meta-TRAIN task:
-    meta_metrics.log_train(loss = task_metrics.val_loss[-1],   # loss over the query set of the meta-TRAIN tasks
-                           acc = task_metrics.val_acc[-1])     # accuracy over the query set of the meta-TRAIN tasks
+    # Split Support (Inner Train) and Query (Inner Val/Outer Update)
+    x_support = data[:, :k].contiguous().view(-1, 3, 84, 84) # [5*K, C, H, W]
+    y_support = torch.arange(p).repeat_interleave(k).to(device) # [0,0,.., 1,1,..]
     
-    # meta-evaluate occasionally:
-    if (m % meta_evaluate_interval == 0):
-        print(f'Meta-training episode {m}/{max_episodes}')
-        meta_eval_results = meta_evaluate(meta_model, # backbone object to evaluate
-                                          model_name = f'Reptile meta-model (episode {m})',
-                                          inspect_tasks = False, # visualise each meta-test task
-                                          progress_bars = False, # show progress bars for fine-tuning each meta-test task
-                                          show_taskwise_accuracy = True, # show plot with query accuracy on each meta-test task
-                                          baseline_avg = baseline_metatest_query_acc # show the performance of our baseline model on that plot
-                                          )
+    x_query   = data[:, k:].contiguous().view(-1, 3, 84, 84) # [5*Q, C, H, W]
+    y_query   = torch.arange(p).repeat_interleave(q).to(device)
 
-        # unpack the meta-evaluation metrics:
-        test_support_loss, test_support_acc, test_query_loss, test_query_acc = meta_eval_results
+    # 2. CREATE A CLONE FOR INNER LOOP (The "Fast" Model)
+    # We clone the state dict to ensure we don't mess up the meta-model gradients yet
+    fast_model = ConvBackbone().to(device)
+    fast_model.load_state_dict(meta_model.state_dict())
+    
+    # Inner Optimizer (usually SGD for few-shot)
+    inner_optimizer = optim.SGD(fast_model.parameters(), lr=INNER_LR)
+    
+    # 3. INNER LOOP (Fine-tune on Support Set)
+    fast_model.train()
+    for _ in range(INNER_STEPS):
+        logits = fast_model(x_support)
+        loss = criterion(logits, y_support)
         
-        # but support performance doesn't matter, our final target is the test query performance:
-        meta_metrics.log_val(loss = test_query_loss,
-                              acc = test_query_acc)
+        inner_optimizer.zero_grad()
+        loss.backward()
+        inner_optimizer.step()
+        
+    # 4. REPTILE UPDATE (Outer Loop)
+    # Theta_new = Theta_old + Epsilon * (Theta_fast - Theta_old)
+    # Which is equivalent to: Gradient = (Theta_old - Theta_fast)
+    
+    meta_optimizer.zero_grad()
+    
+    # We manually set the gradients of the meta_model
+    for meta_param, fast_param in zip(meta_model.parameters(), fast_model.parameters()):
+        # Calculate the "gradient" that moves meta towards fast
+        # Note the sign: we want to move TOWARDS fast_param
+        # Update rule: meta = meta + eps * (fast - meta)
+        # Standard optimizers do: param = param - lr * grad
+        # So: -lr * grad = eps * (fast - meta)
+        # grad = -(eps/lr) * (fast - meta)
+        # Let's just do the manual update without optimizer.step() to be clear, 
+        # OR use the pseudo-gradient method you had:
+        
+        pseudo_grad = (meta_param.data - fast_param.data) # Direction: Meta -> Fast
+        # If we use SGD on outer loop, we would subtract this. 
+        # But you used Adam. Standard Reptile implementation often just does:
+        # meta_param.data = meta_param.data + EPSILON * (fast_param.data - meta_param.data)
+        
+        # YOUR IMPLEMENTATION (Soft Update):
+        meta_param.data.add_(fast_param.data - meta_param.data, alpha=EPSILON)
 
-        # show meta-training plot across episodes:
-        meta_metrics.plot(
-            title=f'Meta-training (Reptile)',
-            baseline_accs={'baseline': baseline_metatest_query_acc},
-            live=False)
+    # Note: If you do the manual .data update above, you do NOT call meta_optimizer.step()
+    # If you want to use Adam for the outer loop (Meta-SGD / MAML style), you need to compute gradients properly.
+    # But pure Reptile is just a soft weight update.
+    
+    # 5. EVALUATE (Optional: Check Query Set performance for logging)
+    if batch_idx % 10 == 0:
+        with torch.no_grad():
+            fast_model.eval()
+            q_logits = fast_model(x_query)
+            q_loss = criterion(q_logits, y_query)
+            q_acc = (q_logits.argmax(dim=1) == y_query).float().mean()
+            print(f"Episode {batch_idx}: Query Loss {q_loss.item():.4f}, Acc {q_acc.item():.4f}")

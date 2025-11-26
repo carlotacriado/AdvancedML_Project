@@ -397,175 +397,7 @@ def top5_acc(pred: torch.FloatTensor,
     top5_idxs = torch.sort(pred, dim=1, descending=True).indices[:,:5]
     correct = (top5_idxs == y.unsqueeze(1)).any(dim=1)
     avg_acc = correct.float().mean().item()
-    return avg_acc   
-
-# TASK DEFINITION
-class Task:
-    """a Task is a few-shot classification problem,
-    comprising a support set (to train on)
-    and a query set (to validate on)"""
-    def __init__(self, 
-                 support_set: TensorDataset, # dataset used for training
-                 query_set: TensorDataset,   # dataset used for validation
-                 name: str,            # string identifier for this task
-                 is_meta_test: bool=False):  # flag to confirm that this task is for final meta-evaluation
-        
-        self.support = support_set
-        self.query   = query_set
-        self.name    = name
-        self.is_meta_test = is_meta_test
-
-        # sanity check that support and query sets contain the same classes:
-        assert set(self.support.classes) == set(self.query.classes)
-        self.classes = self.support.classes
-        
-        # initialise data loaders for each set:
-        self.support_loader = DataLoader(support_set, 
-                                         batch_size=BATCH_SIZE,
-                                         shuffle=True)
-        self.query_loader   = DataLoader(query_set, 
-                                         batch_size=BATCH_SIZE,
-                                         shuffle=True)
-
-    def inspect(self, summarise=False):
-        """visualise the samples from this task's support and query sets.
-        if summarise=False, shows the entirety of each dataset.
-        if summarise=True, show only a single row with one example per class."""
-        if summarise:
-            inspect_fewshot(self.support, summarise=True, title=self.name)
-        else:
-            inspect_fewshot(self.support, title=f'{self.name} (SUPPORT)')
-            inspect_fewshot(self.query, title=f'{self.name} (QUERY)')
-
-### constructor function to randomly create new few-shot tasks:
-def create_task(num_support: int=SUPPORT_SIZE, # number of examples per class for support set
-                num_query: int=QUERY_SIZE,   # number of examples per class for query set
-                N_choices: list[int] = [3,4,5], # choice of N-way classification
-                task_name: str=None, # optional name for task
-                meta_test: bool=False, # generate from meta-test classes instead of meta-train classes
-                within_superclass: bool=False, # generate from within a superclass (for harder tasks)
-               ):
-    """creates a classification task from the possible cifar-100 classes.
-    by default: selects a random subset of 3, 4 or 5 of the 80 meta-training classes.
-    if meta_test=True, selecst from the 20 meta-test classes instead. 
-    
-    returns the support and query datasets around a Task instance"""
-    
-    # choose the number of classes to classify:
-    num_task_classes = np.random.choice(N_choices)
-    
-    if meta_test:
-        # draw from meta-test:
-        meta_classes, meta_superclasses = meta_test_classes, meta_test_superclasses
-        prefix = 'test'
-    else:
-        # draw from meta-train:
-        meta_classes, meta_superclasses = meta_train_classes, meta_train_superclasses
-        prefix = 'train'
-    
-    if not within_superclass:
-        # choose that many classes from the available meta-train classes:
-        task_idxs = np.random.choice(range(len(meta_classes)), size=num_task_classes, replace=False)
-        task_classes = [meta_classes[i] for i in task_idxs]
-        # task_classes = np.random.choice(meta_classes, size=num_task_classes, replace=False)
-    elif within_superclass:
-        # choose a superclass and sample the classes within that only:
-        task_superclass = np.random.choice(meta_superclasses)
-        # task_classes = np.random.choice(superclasses[task_superclass], size=num_task_classes, replace=False)
-
-        task_idxs = np.random.choice(range(len(superclasses[task_superclass])), size=num_task_classes, replace=False)
-        task_classes = [superclasses[task_superclass][i] for i in task_idxs]
-        prefix += f'_{task_superclass}'
-
-
-    if task_name is None:
-        # assign a name automatically from the class IDs randomly chosen
-        task_ids = ''.join([f'{idx:02}' for idx in task_idxs])
-        task_name = f'Meta-{prefix}_{task_ids:0>10}'
-    
-    # image-label pairs for support (training) mini-dataset:
-    support_imgs, support_labels = [], []
-    # image-label pairs for query (test) mini-dataset:
-    query_imgs, query_labels = [], []
-
-    # create the image-label pairs for each class:
-    for c, class_name in enumerate(task_classes):
-        # c is the 'new' integer label in the few-shot task
-        class_num = cifar100.class_to_idx[class_name] # and this is the 'old' integer label in cifar100
-        
-        # randomly select a subset of the cifar100 examples of these classes:
-        all_class_data_idxs = [idx for idx,label in enumerate(cifar100.targets) if label == class_num]
-        np.random.shuffle(all_class_data_idxs)
-
-        support_idxs = all_class_data_idxs[:num_support]
-        query_idxs = all_class_data_idxs[-num_query:]
-    
-        # select images and create correct labels for them:
-        support_imgs.extend([cifar100[idx][0] for idx in support_idxs])
-        support_labels.extend([c] * num_support)
-        
-        query_imgs.extend([cifar100[idx][0] for idx in query_idxs])
-        query_labels.extend([c] * num_query)
-    
-    # create x and y tensors:
-    support_x = torch.stack([preprocess(img) for img in support_imgs])
-    support_y = torch.Tensor(support_labels).long()
-    support_data = TensorDataset(support_x, support_y)
-    
-    query_x = torch.stack([preprocess(img) for img in query_imgs])
-    query_y = torch.Tensor(query_labels).long()
-    query_data = TensorDataset(query_x, query_y)
-
-    # support_data.name = f'{task_name} (SUPPORT)'
-    # query_data.name = f'{task_name} (QUERY)'
-    support_data.set = 'support'
-    query_data.set = 'query'
-    support_data.task_name = query_data.task_name = task_name
-    support_data.classes = query_data.classes = task_classes
-
-    # wrap the support and query data into a Task object:
-    task = Task(support_data, query_data, name=task_name, is_meta_test=meta_test)
-    return task
-
-# image preprocessing step:
-preprocess = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
-
-def inspect_fewshot(fewshot_data: Dataset,
-                 summarise: bool=False, # if False, show each datapoint. if True, show a single-row summary
-                 title: str=None, # optional title for plot,
-                ):
-    """plots the classes from a few-shot dataset
-    to visualise the task distribution"""
-    num_samples = len(fewshot_data)
-    num_classes = len(fewshot_data.classes)
-    num_per_class = len(fewshot_data) // num_classes
-
-    if summarise:
-        # just show one example from each class in the support set
-        task_classes = tuple([str(c) for c in fewshot_data.classes])
-        class_image_examples = [[img for (img,label) in fewshot_data if label==c][0] for c in range(num_classes)]
-        inspect_batch(class_image_examples, labels=task_classes, scale=0.5, 
-                      num_cols=num_classes, title=fewshot_data.name if title is None else title, center_title=False)
-    else:
-        assert len(fewshot_data) < 50, "Few-shot dataset is too big to display completely! (is it definitely few-shot?)"
-
-        # plot each example in the support and query sets
-        sx = torch.stack([e[0] for e in fewshot_data])
-        sy = torch.stack([e[1] for e in fewshot_data])
-        
-        # rearrange column-wise:
-        inds = np.arange(num_samples)
-        col_inds = inds.reshape((num_classes,num_per_class)).T.flatten()
-        sx = [sx[i] for i in col_inds]
-        sy = [sy[i] for i in col_inds]
-        sy_labels = [f'{j}:{fewshot_data.classes[j]}' for j in sy]
-
-        inspect_batch(sx, sy_labels, scale=0.5, 
-                      num_cols=num_classes, 
-                      title=fewshot_data.task_name if title is None else title)    
+    return avg_acc    
 
 def get_meta_dataloaders(dataset, n_way=5, n_shot=1, n_query=15, episodes=1000, test_split_ratio=0.2):
     
@@ -644,6 +476,7 @@ def visualize_episode(images, n_way, n_shot, n_query):
     for cls_idx in range(n_way):
         row_imgs = []
         for img_idx in range(images_per_class):
+            
             # Extract single image tensor
             img = batch_grid[cls_idx, img_idx]
             
@@ -682,4 +515,41 @@ def visualize_episode(images, n_way, n_shot, n_query):
     # 7. Display
     cv2.imshow(f"Episode: {n_way}-Way (Rows), {n_shot}-Shot (Left) | Query (Right)", final_grid)
     cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def visualize_sample(dataset, idx):
+    """
+    Fetches a single sample from the dataset, converts it to OpenCV format,
+    and displays it with metadata in the title.
+    """
+    # 1. Get the Tensor and Label Index
+    # dataset[idx] triggers __getitem__, so transparency fix and transforms happen here
+    img_tensor, label_idx = dataset[idx] 
+    
+    # 2. Retrieve Metadata using our new lookups
+    name = dataset.idx_to_name[label_idx]
+    dex = dataset.idx_to_dex[label_idx]
+    
+    # 3. Convert PyTorch Tensor (C, H, W) -> Numpy (H, W, C)
+    # .permute(1, 2, 0) moves Channel from first to last
+    img_np = img_tensor.permute(1, 2, 0).numpy()
+    
+    # 4. Scale and Cast
+    # PyTorch Tensors are usually 0.0-1.0 floats. OpenCV needs 0-255 uint8.
+    img_np = (img_np * 255).astype(np.uint8)
+    
+    # 5. Convert Color Space (RGB -> BGR for OpenCV)
+    img_cv2 = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+    
+    # 6. Optional: Resize (Zoom in) 
+    # 84x84 is tiny on screen, let's make it 4x bigger (336x336)
+    img_cv2 = cv2.resize(img_cv2, (0,0), fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
+
+    # 7. Create Window Title
+    window_title = f"ID: {label_idx} | Dex: #{dex} | Name: {name}"
+    
+    print(f"Displaying -> {window_title}")
+    
+    cv2.imshow(window_title, img_cv2)
+    cv2.waitKey(0) # Wait for any key press
     cv2.destroyAllWindows()

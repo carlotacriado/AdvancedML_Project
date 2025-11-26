@@ -56,66 +56,6 @@ class EpisodicSampler(Sampler):
     def __len__(self):
         return self.n_episodes
 
-class PokemonSpritesDataset(Dataset):
-    def __init__(self, csv_file, root_dir, transform=None):
-        """
-        Args:
-            csv_file (str): Path to the csv file with metadata.
-            root_dir (str): Parent folder (e.g., "pokemon_sprites").
-            transform (callable, optional): Transform to be applied on a sample.
-        """
-        self.root_dir = root_dir
-        self.transform = transform
-        
-        # 1. Load the CSV
-        self.pokemon_info = pd.read_csv(csv_file)
-        
-        # 2. FLATTEN THE DATA
-        self.samples = [] 
-        
-        for idx, row in self.pokemon_info.iterrows():
-            dex_num_str = str(row['dex_number']).zfill(3)
-            name = row['name'].lower()
-            folder_name = dex_num_str + "-" + name
-            folder_path = os.path.join(root_dir, folder_name)
-            print(folder_path) # debug
-            
-            # Check if folder exists to avoid crashing
-            if os.path.isdir(folder_path):
-                images = list(Path(folder_path).glob('*.*')) 
-                
-                for img_path in images:
-                    # We store the specific image path AND the index of the metadata
-                    self.samples.append((str(img_path), idx))
-    
-    def __len__(self):
-        # Returns the total number of IMAGES
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        # 1. Retrieve the image path and the metadata index
-        img_path, metadata_idx = self.samples[idx]
-        
-        # 2. Load Image
-        image = Image.open(img_path).convert('RGB')
-        
-        # 3. Retrieve Metadata (Optional: choose what you need)
-        meta_row = self.pokemon_info.iloc[metadata_idx]
-        
-        # Example: Let's extract the Type 1 and Type 2 as labels
-        pokemon = meta_row['name']
-        type1 = meta_row['type_1']
-        dex_number = meta_row['dex_number']
-        gen = meta_row['generation']
-        
-        # 4. Apply Transforms
-        if self.transform:
-            image = self.transform(image)
-            
-        # 5. Return whatever your training loop needs
-        return image, pokemon, dex_number, type1, gen
-    
-
 class PokemonMetaDataset(Dataset):
     def __init__(self, csv_file, root_dir, transform=None):
         self.root_dir = root_dir
@@ -124,6 +64,9 @@ class PokemonMetaDataset(Dataset):
         
         self.samples = [] # Flat list: [(path, label_idx), ...]
         self.indices_by_label = {} # NEW: { label_idx: [0, 1, 2, ...] }
+
+        self.idx_to_name = self.pokemon_info['name'].to_dict() # This allows to map pokemon name to the output neuron
+        self.idx_to_dex = self.pokemon_info['dex_number'].to_dict() # This allows to map pokemon dex number to the output neuron
         
         # --- Loading Logic ---
         for idx, row in self.pokemon_info.iterrows():
@@ -150,11 +93,80 @@ class PokemonMetaDataset(Dataset):
 
     def __len__(self):
         return len(self.samples)
+    
+    def _load_and_fix_transparency(self, path):
+        """
+        1. Fixes Alpha channel transparency.
+        2. Detects solid black backgrounds and Flood Fills them to white.
+        """
+        image = Image.open(path)
+        image = image.convert('RGBA') # Convert everything to RGBA first
+        
+        # --- Step 1: Handle Existing Transparency ---
+        # Create a white canvas
+        bg = Image.new('RGBA', image.size, (255, 255, 255, 255))
+        # Paste the image using its own alpha channel as mask
+        bg.paste(image, mask=image.split()[-1])
+        
+        # Convert to RGB (now we have a white background for transparent images)
+        rgb_img = bg.convert('RGB')
+        
+        # --- Step 2: Handle "Fake" Black Backgrounds ---
+        # Convert to NumPy for OpenCV processing
+        np_img = np.array(rgb_img)
+        
+        # Check the top-left pixel (0,0). If it's effectively black, clean it.
+        # We allow a small threshold (e.g., < 15) in case of JPEG artifacts
+        top_left_pixel = np_img[0, 0]
+        
+        if np.all(top_left_pixel < 15): 
+            # FLOOD FILL: simple and fast
+            # cv2.floodFill(image, mask, seedPoint, newVal)
+            # loDiff and upDiff allow for slight variations in the black color
+            h, w = np_img.shape[:2]
+            mask = np.zeros((h+2, w+2), np.uint8) # Mask must be 2 pixels larger
+            
+            # Fill starting from (0,0) with White (255,255,255)
+            cv2.floodFill(
+                np_img, 
+                mask, 
+                (0,0), 
+                (255, 255, 255), 
+                loDiff=(20, 20, 20), 
+                upDiff=(20, 20, 20)
+            )
+            
+            # Also check the bottom-right corner (sometimes sprites are offset)
+            if np.all(np_img[-1, -1] < 15):
+                cv2.floodFill(
+                    np_img, 
+                    mask, 
+                    (w-1, h-1), 
+                    (255, 255, 255), 
+                    loDiff=(20, 20, 20), 
+                    upDiff=(20, 20, 20)
+                )
+
+        # Convert back to PIL
+        return Image.fromarray(np_img)
 
     def __getitem__(self, idx):
         img_path, label_idx = self.samples[idx]
-        image = Image.open(img_path).convert('RGB')
+        
+        # USE THE NEW HELPER FUNCTION HERE
+        image = self._load_and_fix_transparency(img_path)
+        
         if self.transform:
             image = self.transform(image)
-        # Return just image and label_idx for simplicity in training
-        return image, label_idx   
+            
+        return image, label_idx
+    
+    def get_pokemon_details(self, label_idx):
+        """Returns the Name and Dex Number for a given label index"""
+        # Handle tensor inputs just in case
+        if isinstance(label_idx, torch.Tensor):
+            label_idx = label_idx.item()
+            
+        name = self.idx_to_name[label_idx]
+        dex = self.idx_to_dex[label_idx]
+        return name, dex
