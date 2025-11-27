@@ -448,6 +448,8 @@ def get_meta_dataloaders(dataset, n_way=5, n_shot=1, n_query=15, episodes=1000, 
     
     return train_loader, test_loader
 
+# VISUALISATION
+
 def visualize_episode(images, n_way, n_shot, n_query):
     """
     Visualizes a meta-learning episode as a grid.

@@ -4,6 +4,8 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
+from torch import nn
+import torch
 
 conv_num_features = 128 
 
