@@ -3,7 +3,7 @@ import pandas as pd
 from PIL import Image
 from pathlib import Path
 import torch
-from torch.utils.data import Sampler, Dataset, TensorDataset
+from torch.utils.data import Sampler, Dataset, DataLoader
 import numpy as np
 import cv2
 
@@ -68,7 +68,13 @@ class PokemonMetaDataset(Dataset):
 
         self.idx_to_name = self.pokemon_info['name'].to_dict() # This allows to map pokemon name to the output neuron
         self.idx_to_dex = self.pokemon_info['dex_number'].to_dict() # This allows to map pokemon dex number to the output neuron
-        
+        self.idx_to_type1 = self.pokemon_info['type_1'].to_dict() # This allows to map pokemon Type 1 to the output neuron
+        self.idx_to_type2 = self.pokemon_info['type_2'].to_dict() # This allows to map pokemon Type 2 to the output neuron
+        self.idx_to_gen = self.pokemon_info['generation'].to_dict() # This allows to map pokemon generation to the output neuron
+        self.idx_to_pre_evo = self.pokemon_info['pre_evolution'].to_dict() # This allows to map pokemon pre-evolution to the output neuron
+        self.idx_to_evo = self.pokemon_info['evolution'].to_dict() # This allows to map pokemon pre-evolution to the output neuron
+
+
         # --- Loading Logic ---
         for idx, row in self.pokemon_info.iterrows():
             dex_str = str(row['dex_number']).zfill(3)
@@ -170,4 +176,81 @@ class PokemonMetaDataset(Dataset):
             
         name = self.idx_to_name[label_idx]
         dex = self.idx_to_dex[label_idx]
-        return name, dex
+        type1 = self.idx_to_type1[label_idx]
+        type2 = self.idx_to_type2[label_idx]
+        gen = self.idx_to_gen[label_idx]
+        pre_evo = self.idx_to_pre_evo[label_idx]
+        evo = self.idx_to_evo[label_idx]
+
+        return name, dex, type1, type2, gen, pre_evo, evo
+    
+def get_structured_splits(dataset, split_mode='generation', train_vals=None, test_vals=None):
+    """
+    Returns two lists of label indices (train_labels, test_labels) based on metadata.
+    
+    Args:
+        dataset: Your PokemonMetaDataset
+        split_mode: 'generation', 'type', or 'stage'
+        train_vals: List of values to keep in train (e.g., [1, 2, 3] for gens)
+        test_vals: List of values to keep in test (e.g., [4, 5])
+    """
+    all_labels = list(dataset.indices_by_label.keys())
+    train_labels = []
+    test_labels = []
+    
+    print(f"--- Splitting by {split_mode.upper()} ---")
+    
+    for label_idx in all_labels:
+        # 1. Fetch the specific metadata for this label
+        # (We use the lookups you created in __init__)
+        if split_mode == 'generation':
+            val = dataset.idx_to_gen[label_idx]
+        elif split_mode == 'type':
+            val = dataset.idx_to_type1[label_idx] # Primary type
+        elif split_mode == 'stage':
+            # 1: Basic, 2: Stage 1, 3: Stage 2
+            # You might need to clean your CSV logic if it uses strings like "Basic"
+            val = dataset.pokemon_info.iloc[label_idx]['evolution_stage'] 
+        else:
+            raise ValueError("Unknown split mode")
+            
+        # 2. Sort into buckets
+        # Convert to string for safer comparison (e.g. '1' vs 1)
+        if val in train_vals:
+            train_labels.append(label_idx)
+        elif val in test_vals:
+            test_labels.append(label_idx)
+            
+    print(f"Train Classes: {len(train_labels)} | Test Classes: {len(test_labels)}")
+    return train_labels, test_labels
+
+def get_meta_dataloaders(dataset, train_labels, test_labels, n_way, n_shot, n_query, episodes):
+    
+    # --- Train Loader ---
+    # We manually inject the filtered labels into the sampler
+    train_sampler = EpisodicSampler(
+        dataset=dataset, 
+        n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
+    )
+    # FORCE the sampler to use only our chosen classes
+    train_sampler.valid_labels = [
+        l for l in train_labels 
+        if l in dataset.indices_by_label and len(dataset.indices_by_label[l]) >= (n_shot + n_query)
+    ]
+    
+    train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=2)
+
+    # --- Test Loader ---
+    test_sampler = EpisodicSampler(
+        dataset=dataset, 
+        n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
+    )
+    # FORCE the sampler to use only our chosen classes
+    test_sampler.valid_labels = [
+        l for l in test_labels 
+        if l in dataset.indices_by_label and len(dataset.indices_by_label[l]) >= (n_shot + n_query)
+    ]
+    
+    test_loader = DataLoader(dataset, batch_sampler=test_sampler, num_workers=2)
+    
+    return train_loader, test_loader

@@ -22,10 +22,22 @@ if __name__ == '__main__':
     ds = PokemonMetaDataset('pokemon_data_gen1-5.csv', 'pokemon_sprites', transform=transform_pipeline)
 
     # 2. Create Loaders
-    # Note: 'episodes' arg controls how long the loop runs before stopping to validate
-    train_loader, test_loader = get_meta_dataloaders(
-        ds, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY, episodes=EPISODES_PER_EPOCH
+    # Train on Gen 1, 2, 3. Test on Gen 4.
+    train_labels, test_labels = get_structured_splits(
+        ds, 
+        split_mode='generation', 
+        train_vals=['generation-i', 'generation-ii', 'generation-iii'], 
+        test_vals=['generation-iv']
     )
+
+    # train_labels, test_labels = get_structured_splits(
+    # ds, 
+    # split_mode='type', 
+    # train_vals=['Grass', 'Fire', 'Water', 'Bug', 'Normal', 'Electric'], 
+    # test_vals=['Dragon', 'Ghost', 'Ice', 'Steel']
+    # )
+
+    train_loader, test_loader = get_meta_dataloaders(ds, train_labels, test_labels, N_WAY, N_SHOT, N_QUERY, EPISODES_PER_EPOCH)
 
     # 3. INITIALIZE MODEL
     print("Initializing Model...")
@@ -33,4 +45,3 @@ if __name__ == '__main__':
 
     # 4. START TRAINING
     train_reptile(meta_model, train_loader, test_loader, device)
-    

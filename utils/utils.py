@@ -399,55 +399,6 @@ def top5_acc(pred: torch.FloatTensor,
     avg_acc = correct.float().mean().item()
     return avg_acc    
 
-def get_meta_dataloaders(dataset, n_way=5, n_shot=1, n_query=15, episodes=1000, test_split_ratio=0.2):
-    
-    # Get all available class labels
-    all_labels = list(dataset.indices_by_label.keys())
-    
-    # Shuffle and split labels (Pokemon) into Train and Test sets
-    np.random.shuffle(all_labels)
-    split_idx = int(len(all_labels) * (1 - test_split_ratio))
-    
-    train_labels = set(all_labels[:split_idx])
-    test_labels = set(all_labels[split_idx:])
-    
-    # Helper to create a sub-dictionary of indices for the sampler
-    def get_indices_subset(target_labels):
-        return {k: v for k, v in dataset.indices_by_label.items() if k in target_labels}
-
-    # --- Train Loader ---
-    # We assign the filtered indices logic to the sampler dynamically
-    train_sampler_indices = get_indices_subset(train_labels)
-    
-    # Hack: Create a temporary object or modify the sampler to accept a dict directly
-    # Better approach: Pass the dict directly to the Sampler (Requires slight edit to Sampler above)
-    # Let's modify the Sampler init slightly in your mind to accept 'data_source' as just the dict
-    
-    # Create the Sampler for Training
-    train_sampler = EpisodicSampler(
-        dataset=dataset, # It will filter internally based on what we pass, see below *
-        n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
-    )
-    # *Fix*: Overwrite the sampler's indices with our train split
-    train_sampler.indices_by_label = train_sampler_indices
-    train_sampler.valid_labels = [l for l in train_sampler_indices if len(train_sampler_indices[l]) >= (n_shot + n_query)]
-
-    train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=2)
-
-    # --- Test Loader ---
-    test_sampler = EpisodicSampler(
-        dataset=dataset, 
-        n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=200 # Fewer episodes for testing
-    )
-    # *Fix*: Overwrite with test split
-    test_sampler_indices = get_indices_subset(test_labels)
-    test_sampler.indices_by_label = test_sampler_indices
-    test_sampler.valid_labels = [l for l in test_sampler_indices if len(test_sampler_indices[l]) >= (n_shot + n_query)]
-    
-    test_loader = DataLoader(dataset, batch_sampler=test_sampler, num_workers=2)
-    
-    return train_loader, test_loader
-
 # VISUALISATION
 
 def visualize_episode(images, n_way, n_shot, n_query):
