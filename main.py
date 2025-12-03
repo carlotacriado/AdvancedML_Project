@@ -23,25 +23,26 @@ if __name__ == '__main__':
 
     # 2. Create Loaders
     # Train on Gen 1, 2, 3. Test on Gen 4.
-    train_labels, test_labels = get_structured_splits(
+    train_labels, test_labels, val_labels = get_structured_splits(
         ds, 
         split_mode='generation', 
-        train_vals=['generation-i', 'generation-ii', 'generation-iii'], 
+        train_vals=['generation-i', 'generation-ii'],
+        val_vals=['generation-iii'],
         test_vals=['generation-iv']
     )
 
     # train_labels, test_labels = get_structured_splits(
     # ds, 
     # split_mode='type', 
-    # train_vals=['Grass', 'Fire', 'Water', 'Bug', 'Normal', 'Electric'], 
+    # train_vals=['Grass', 'Fire', 'Water', 'Bug', 'Normal', 'Electric'],
     # test_vals=['Dragon', 'Ghost', 'Ice', 'Steel']
     # )
 
-    train_loader, test_loader = get_meta_dataloaders(ds, train_labels, test_labels, N_WAY, N_SHOT, N_QUERY, EPISODES_PER_EPOCH)
+    train_loader, test_loader, val_loader = get_meta_dataloaders(ds, train_labels, test_labels, val_labels, N_WAY, N_SHOT, N_QUERY, EPISODES_PER_EPOCH)
 
     # 3. INITIALIZE MODEL
     print("Initializing Model...")
     meta_model = ConvBackbone().to(device)
 
     # 4. START TRAINING
-    train_reptile(meta_model, train_loader, test_loader, device)
+    #train_reptile(meta_model, train_loader, test_loader, device)

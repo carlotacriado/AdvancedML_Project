@@ -6,10 +6,12 @@ import torch
 from torch.utils.data import Sampler, Dataset, DataLoader
 import numpy as np
 import cv2
+import random
+from utils.globals import *
 
 
-class EpisodicSampler(Sampler):
-    def __init__(self, dataset, n_way, n_shot, n_query, n_episodes):
+class Pokedex(Sampler): # Task Who's That Pokémon
+    def __init__(self, dataset, target_labels, n_way, n_shot, n_query, n_episodes):
         """
         Args:
             dataset: Instance of PokemonMetaDataset
@@ -23,12 +25,80 @@ class EpisodicSampler(Sampler):
         self.n_shot = n_shot
         self.n_query = n_query
         self.n_episodes = n_episodes
+    
         
-        # Filter out classes that don't have enough images (shot + query)
-        self.valid_labels = [
-            label for label, indices in self.indices_by_label.items() 
-            if len(indices) >= (n_shot + n_query)
-        ]
+        # Filter specifically from the source_labels
+        self.valid_labels = []
+
+        for label in target_labels:
+            if label in dataset.indices_by_label:
+                 # 2. Count Check: Do we have enough images?
+                # We need at least (K_SHOT + Q_QUERY) images to make a valid task
+                image_indices = dataset.indices_by_label[label]
+                required_count = n_shot + n_query
+                
+                if len(image_indices) >= required_count:
+                    self.valid_labels.append(label)
+                
+
+        
+        if len(self.valid_labels) < n_way:
+            raise ValueError(f"Not enough classes with sufficient images. Need {n_way}, found {len(self.valid_labels)}")
+
+    def __iter__(self):
+        for _ in range(self.n_episodes):
+            batch_indices = []
+            
+            # 1. Randomly select N classes (Pokemon)
+            selected_classes = np.random.choice(self.valid_labels, self.n_way, replace=False)
+            
+            for cls in selected_classes:
+                # 2. Within each class, select K + Q images
+                # We use replace=False so support and query sets don't overlap
+                cls_indices = self.indices_by_label[cls]
+                selected_imgs = np.random.choice(
+                    cls_indices, 
+                    self.n_shot + self.n_query, 
+                    replace=False
+                )
+                batch_indices.extend(selected_imgs)
+            
+            yield batch_indices
+
+    def __len__(self):
+        return self.n_episodes
+    
+class Oak(Sampler): # Task Same Evolution Line
+    def __init__(self, dataset, target_labels, n_way, n_shot, n_query, n_episodes):
+        """
+        Args:
+            dataset: Instance of PokemonMetaDataset
+            n_way: Number of classes (Pokemon) per episode
+            n_shot: Number of support images per class
+            n_query: Number of query images per class
+            n_episodes: Number of episodes (batches) to generate per epoch
+        """
+        self.indices_by_label = dataset.indices_by_label
+        self.n_way = n_way
+        self.n_shot = n_shot
+        self.n_query = n_query
+        self.n_episodes = n_episodes
+    
+        
+        # Filter specifically from the source_labels
+        self.valid_labels = []
+
+        for label in target_labels:
+            if label in dataset.indices_by_label:
+                 # 2. Count Check: Do we have enough images?
+                # We need at least (K_SHOT + Q_QUERY) images to make a valid task
+                image_indices = dataset.indices_by_label[label]
+                required_count = n_shot + n_query
+                
+                if len(image_indices) >= required_count:
+                    self.valid_labels.append(label)
+                
+
         
         if len(self.valid_labels) < n_way:
             raise ValueError(f"Not enough classes with sufficient images. Need {n_way}, found {len(self.valid_labels)}")
@@ -184,7 +254,7 @@ class PokemonMetaDataset(Dataset):
 
         return name, dex, type1, type2, gen, pre_evo, evo
     
-def get_structured_splits(dataset, split_mode='generation', train_vals=None, test_vals=None):
+def get_structured_splits(dataset, split_mode='generation', train_vals=None, val_vals=None, test_vals=None):
     """
     Returns two lists of label indices (train_labels, test_labels) based on metadata.
     
@@ -192,11 +262,13 @@ def get_structured_splits(dataset, split_mode='generation', train_vals=None, tes
         dataset: Your PokemonMetaDataset
         split_mode: 'generation', 'type', or 'stage'
         train_vals: List of values to keep in train (e.g., [1, 2, 3] for gens)
+        val_vals: List of values to keep in validation (e.g., [3] for gens)
         test_vals: List of values to keep in test (e.g., [4, 5])
     """
     all_labels = list(dataset.indices_by_label.keys())
     train_labels = []
     test_labels = []
+    val_labels = []
     
     print(f"--- Splitting by {split_mode.upper()} ---")
     
@@ -213,44 +285,56 @@ def get_structured_splits(dataset, split_mode='generation', train_vals=None, tes
             val = dataset.pokemon_info.iloc[label_idx]['evolution_stage'] 
         else:
             raise ValueError("Unknown split mode")
-            
+
         # 2. Sort into buckets
-        # Convert to string for safer comparison (e.g. '1' vs 1)
         if val in train_vals:
             train_labels.append(label_idx)
+        elif (val_vals is not None) and (val in val_vals):
+            val_labels.append(label_idx)
         elif val in test_vals:
             test_labels.append(label_idx)
-            
-    print(f"Train Classes: {len(train_labels)} | Test Classes: {len(test_labels)}")
-    return train_labels, test_labels
+    
+    if val_vals is None:
+        random.shuffle(train_labels)
 
-def get_meta_dataloaders(dataset, train_labels, test_labels, n_way, n_shot, n_query, episodes):
+        num_total_train = len(train_labels)
+        num_val = int(num_total_train * VAL_SPLIT)
+        
+        val_labels = train_labels[:num_val]
+        train_labels = train_labels[num_val:]
+            
+    print(f"Train Classes: {len(train_labels)} | Test Classes: {len(test_labels)} | Validation Classes: {len(val_labels)}")
+    return train_labels, test_labels, val_labels
+
+def get_meta_dataloaders(dataset, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
     
     # --- Train Loader ---
     # We manually inject the filtered labels into the sampler
-    train_sampler = EpisodicSampler(
-        dataset=dataset, 
+    train_sampler = Pokedex(
+        dataset=dataset,
+        target_labels=train_labels, 
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
-    # FORCE the sampler to use only our chosen classes
-    train_sampler.valid_labels = [
-        l for l in train_labels 
-        if l in dataset.indices_by_label and len(dataset.indices_by_label[l]) >= (n_shot + n_query)
-    ]
+    print(len(train_sampler))
     
     train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=2)
 
     # --- Test Loader ---
-    test_sampler = EpisodicSampler(
+    test_sampler = Pokedex(
         dataset=dataset, 
+        target_labels=test_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
-    # FORCE the sampler to use only our chosen classes
-    test_sampler.valid_labels = [
-        l for l in test_labels 
-        if l in dataset.indices_by_label and len(dataset.indices_by_label[l]) >= (n_shot + n_query)
-    ]
     
     test_loader = DataLoader(dataset, batch_sampler=test_sampler, num_workers=2)
+
+    # --- Validation Loader ---
+    val_sampler = Pokedex(
+        dataset=dataset, 
+        target_labels=val_labels,
+        n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
+    )
     
-    return train_loader, test_loader
+    val_loader = DataLoader(dataset, batch_sampler=val_sampler, num_workers=2)
+    
+    return train_loader, test_loader, val_loader

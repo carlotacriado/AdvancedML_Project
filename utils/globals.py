@@ -13,3 +13,5 @@ EPISODES_PER_EPOCH = 100 # How many episodes in one loader iteration
 INNER_LR = 0.01        # Learning rate for the clone
 INNER_STEPS = 5        # How many gradient steps the clone takes
 EPSILON = 0.1          # Reptile outer learning rate
+
+VAL_SPLIT = 0.2
