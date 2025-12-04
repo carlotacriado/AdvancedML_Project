@@ -1,8 +1,8 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
+import pandas as pd # type: ignore
+import numpy as np # type: ignore
+import matplotlib.pyplot as plt # type: ignore
 import os
-import seaborn as sns
+import seaborn as sns # type: ignore
 
 # Dataset
 df = pd.read_csv(r"C:\Users\Administrator\OneDrive\Escritorio\IA\Curso 4\Advanced ML\Project Rep\AdvancedML_Project\AdvancedML_Project\pokemon_data_gen1-5.csv")
@@ -202,7 +202,7 @@ print("\nAnálisis completado.")
 # ANALISIS DE TAMAÑOS
 import os
 import pandas as pd
-from PIL import Image
+from PIL import Image # type: ignore
 
 # --- CONFIGURA ESTAS RUTAS ---
 ROOT_IMG_DIR = r"C:\Users\Administrator\OneDrive\Escritorio\IA\Curso 4\Advanced ML\Project Rep\AdvancedML_Project\AdvancedML_Project\pokemon_sprites"
