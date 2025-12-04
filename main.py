@@ -6,48 +6,62 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 import cv2
 
+from Models.Reptile import *
+from Models.Baseline import *
+
 if __name__ == '__main__':
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # 1. Initialize Dataset
+    print("Creating Dataset...")
     transform_pipeline = transforms.Compose([
-        transforms.Resize((84, 84)), # Standard size for meta-learning (e.g., 84x84)
-        transforms.ToTensor()        # Converts PIL Image -> Tensor (C, H, W)
+        transforms.Resize((84, 84)), 
+        transforms.ToTensor()
     ])
-
-    ds = PokemonMetaDataset(csv_file='pokemon_data_gen1-5.csv', 
-                            root_dir='pokemon_sprites',
-                            transform=transform_pipeline)
-
-    # TEST
-    # Check 10 random images to be sure
-    import random
-    for i in range(300*15,450*15,15):
-        rand_idx = random.randint(0, len(ds)-1)
-        print("Checking random sample...")
-        visualize_sample(ds, i)
-    # TEST END
     
-    
-    # 2. Create Loaders (e.g., 5-way, 3-shot)
-    train_loader, test_loader = get_meta_dataloaders(
-        ds, n_way=5, n_shot=SUPPORT_SIZE, n_query=QUERY_SIZE, episodes=100
+    ds = PokemonMetaDataset('pokemon_data_linked.csv', 'pokemon_sprites', transform=transform_pipeline)
+
+    # 2. Create Loaders
+    # Train on Gen 1, 2, 3. Test on Gen 4.
+    train_labels, test_labels, val_labels = get_structured_splits(
+        ds, 
+        split_mode='generation', 
+        train_vals=['generation-i', 'generation-ii', 'generation-iii'],
+        #val_vals=['generation-iii'],
+        test_vals=['generation-iv']
     )
+
+    # train_labels, test_labels = get_structured_splits(
+    # ds, 
+    # split_mode='type', 
+    # train_vals=['Grass', 'Fire', 'Water', 'Bug', 'Normal', 'Electric'],
+    # test_vals=['Dragon', 'Ghost', 'Ice', 'Steel']
+    # )
+
+    train_loader, test_loader, val_loader = get_meta_dataloaders_pokedex(ds, train_labels, test_labels, val_labels, N_WAY, N_SHOT, N_QUERY, EPISODES_PER_EPOCH)
     
-    # 3. Training Loop
-    for batch_idx, (images, labels) in enumerate(train_loader):
-        # images shape: [batch_size, C, H, W]
-        if batch_idx == 0:
-            print("Visualizing first episode...")
-            visualize_episode(images, n_way=5, n_shot=SUPPORT_SIZE, n_query=QUERY_SIZE)
-        
-        p = 5 # n_way
-        k = SUPPORT_SIZE # n_shot
-        q = QUERY_SIZE # n_query
-        
-        # Reshape to: [N_way, K_shot + Q_query, C, H, W]
-        x = images.view(p, k + q, 3, 84, 84) # Assuming image size 84x84
-        
-        x_support = x[:, :k].contiguous() # [5, 3, 3, 84, 84]
-        x_query   = x[:, k:].contiguous() # [5, 3, 3, 84, 84]
-        
-        # Apply your meta-learning algorithm (e.g., ProtoNet) here...
-        print(f"Batch {batch_idx}: Support {x_support.shape}, Query {x_query.shape}")
+    oak_train_loader, oak_test_loader, oak_val_loader = get_meta_dataloaders_oak(ds, train_labels, test_labels, val_labels, N_WAY, N_SHOT, N_QUERY, EPISODES_PER_EPOCH)
+
+    # --- VISUALIZATION BLOCK ---
+    print("Fetching Pokedex Episode (Standard)...")
+    pok_images, pok_labels = next(iter(train_loader))
+    visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+    pok_images, pok_labels = next(iter(val_loader))
+    visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+    pok_images, pok_labels = next(iter(test_loader))
+    visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+
+    print("Fetching Oak Episode (Evolutionary)...")
+    oak_images, oak_labels = next(iter(oak_train_loader))
+    visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)      
+    oak_images, oak_labels = next(iter(oak_val_loader))
+    visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+    oak_images, oak_labels = next(iter(oak_test_loader))
+    visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+
+    # 3. INITIALIZE MODEL
+    print("Initializing Model...")
+    meta_model = ConvBackbone().to(device)
+
+    # 4. START TRAINING
+    #train_reptile(meta_model, train_loader, test_loader, device)
