@@ -42,26 +42,26 @@ if __name__ == '__main__':
     
     oak_train_loader, oak_test_loader, oak_val_loader = get_meta_dataloaders_oak(ds, train_labels, test_labels, val_labels, N_WAY, N_SHOT, N_QUERY, EPISODES_PER_EPOCH)
 
-    # --- VISUALIZATION BLOCK ---
-    print("Fetching Pokedex Episode (Standard)...")
-    pok_images, pok_labels = next(iter(train_loader))
-    visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
-    pok_images, pok_labels = next(iter(val_loader))
-    visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
-    pok_images, pok_labels = next(iter(test_loader))
-    visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+    # # --- VISUALIZATION BLOCK ---
+    # print("Fetching Pokedex Episode (Standard)...")
+    # pok_images, pok_labels = next(iter(train_loader))
+    # visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+    # pok_images, pok_labels = next(iter(val_loader))
+    # visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+    # pok_images, pok_labels = next(iter(test_loader))
+    # visualize_episode(pok_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
 
-    print("Fetching Oak Episode (Evolutionary)...")
-    oak_images, oak_labels = next(iter(oak_train_loader))
-    visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)      
-    oak_images, oak_labels = next(iter(oak_val_loader))
-    visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
-    oak_images, oak_labels = next(iter(oak_test_loader))
-    visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+    # print("Fetching Oak Episode (Evolutionary)...")
+    # oak_images, oak_labels = next(iter(oak_train_loader))
+    # visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)      
+    # oak_images, oak_labels = next(iter(oak_val_loader))
+    # visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
+    # oak_images, oak_labels = next(iter(oak_test_loader))
+    # visualize_episode(oak_images, n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY)
 
     # 3. INITIALIZE MODEL
     print("Initializing Model...")
     meta_model = ConvBackbone().to(device)
 
     # 4. START TRAINING
-    train_reptile(meta_model, train_loader, test_loader, device)
+    train_reptile(meta_model, train_loader, test_loader, val_loader, device)

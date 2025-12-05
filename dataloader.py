@@ -42,8 +42,8 @@ class Pokedex(Sampler): # Task Who's That Pokémon
                 
 
         
-        # if len(self.valid_labels) < n_way:
-        #     raise ValueError(f"Not enough classes with sufficient images. Need {n_way}, found {len(self.valid_labels)}")
+        if len(self.valid_labels) < n_way:
+            raise ValueError(f"Not enough classes with sufficient images. Need {n_way}, found {len(self.valid_labels)}")
 
     def __iter__(self):
         for _ in range(self.n_episodes):
@@ -112,9 +112,9 @@ class Oak(Sampler): # Task: Same Evolution Line, Different Stage
             if len(valid_members) >= 2:
                 self.valid_families.append(valid_members)
 
-        # if len(self.valid_families) < n_way:
-        #     raise ValueError(f"Not enough valid families (needs {n_way}, found {len(self.valid_families)}). "
-        #                      f"A valid family for this task needs at least 2 evolution stages present in the split.")
+        if len(self.valid_families) < n_way:
+            raise ValueError(f"Not enough valid families (needs {n_way}, found {len(self.valid_families)}). "
+                             f"A valid family for this task needs at least 2 evolution stages present in the split.")
 
     def __iter__(self):
         for _ in range(self.n_episodes):
@@ -341,7 +341,6 @@ def get_meta_dataloaders_pokedex(dataset, train_labels, test_labels, val_labels,
         target_labels=train_labels, 
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
-    print(len(train_sampler))
     
     train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=2)
 
@@ -374,7 +373,6 @@ def get_meta_dataloaders_oak(dataset, train_labels, test_labels, val_labels, n_w
         target_labels=train_labels, 
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
-    print(len(train_sampler))
     
     train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=2)
 

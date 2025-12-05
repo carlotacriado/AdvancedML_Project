@@ -117,7 +117,7 @@ def train_reptile(meta_model, train_loader, test_loader, val_loader, device):
         
         # A. TRAIN ONE EPOCH
         avg_loss = train_epoch(
-            meta_model, train_loader, 
+            meta_model, train_loader, val_loader,
             N_WAY, N_SHOT, N_QUERY, 
             INNER_LR, INNER_STEPS, EPSILON, device
         )
