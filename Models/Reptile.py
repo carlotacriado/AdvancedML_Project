@@ -5,7 +5,7 @@ import copy
 from tqdm import tqdm
 from utils.globals import *
 
-def train_epoch(meta_model, train_loader, n_way, k_shot, q_query, inner_lr, inner_steps, epsilon, device):
+def train_epoch(meta_model, train_loader, val_loader, n_way, k_shot, q_query, inner_lr, inner_steps, epsilon, device):
     """
     Trains the meta_model for one epoch (e.g., 100 episodes) using manual tensor reshaping.
     """
@@ -108,10 +108,10 @@ def evaluate(meta_model, test_loader, n_way, k_shot, q_query, inner_lr, inner_st
 
     return total_acc / len(test_loader)
 
-def train_reptile(meta_model, train_loader, test_loader, device):
+def train_reptile(meta_model, train_loader, test_loader, val_loader, device):
     print(f"Starting Training: {MAX_EPOCHS} Epochs x {EPISODES_PER_EPOCH} Episodes = {MAX_EPOCHS*EPISODES_PER_EPOCH} Total Episodes")
     
-    best_acc = 0.0
+    best_val_acc = 0.0
     
     for epoch in range(1, MAX_EPOCHS + 1):
         
@@ -125,7 +125,7 @@ def train_reptile(meta_model, train_loader, test_loader, device):
         # B. VALIDATE EVERY X EPOCHS
         if epoch % 5 == 0:
             val_acc = evaluate(
-                meta_model, test_loader, 
+                meta_model, val_loader, 
                 N_WAY, N_SHOT, N_QUERY, 
                 INNER_LR, INNER_STEPS, device
             )
@@ -133,9 +133,19 @@ def train_reptile(meta_model, train_loader, test_loader, device):
             print(f"Epoch {epoch}: Train Loss {avg_loss:.4f} | Val Acc {val_acc*100:.2f}%")
             
             # Save Best
-            if val_acc > best_acc:
-                best_acc = val_acc
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
                 torch.save(meta_model.state_dict(), "best_pokemon_reptile.pth")
                 print(" -> New Best Model Saved!")
         else:
             print(f"Epoch {epoch}: Train Loss {avg_loss:.4f}")
+
+    print("\n--- Training Finished. Running Final Test ---")
+    meta_model.load_state_dict(torch.load("best_pokemon_reptile.pth"))
+    
+    test_acc = evaluate(
+        meta_model, test_loader, 
+        N_WAY, N_SHOT, N_QUERY, 
+        INNER_LR, INNER_STEPS, device
+    )
+    print(f"Final Test Accuracy: {test_acc*100:.2f}%")

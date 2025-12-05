@@ -64,4 +64,4 @@ if __name__ == '__main__':
     meta_model = ConvBackbone().to(device)
 
     # 4. START TRAINING
-    #train_reptile(meta_model, train_loader, test_loader, device)
+    train_reptile(meta_model, train_loader, test_loader, device)
