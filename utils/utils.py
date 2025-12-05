@@ -19,8 +19,8 @@ from IPython.display import display, clear_output
 
 #from torchinfo import summary
 
-from utils.globals import *
-from dataloader import *
+from Utils.globals import *
+from Dataloaders.dataloader import *
 
 # VISUALISATION AND LOGGERS
 class TrainingMetrics:

@@ -1,6 +1,6 @@
-from dataloader import *
-from utils.utils import *
-from utils.globals import *
+from Dataloaders.dataloader import *
+from Utils.utils import *
+from Utils.globals import *
 
 from torchvision import transforms
 from torch.utils.data import DataLoader
