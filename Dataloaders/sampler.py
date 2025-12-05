@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 import random
 from Utils.globals import *
+from Utils.utils import *
 
 class Pokedex(Sampler): # Task Who's That Pokémon
     def __init__(self, dataset, target_labels, n_way, n_shot, n_query, n_episodes):

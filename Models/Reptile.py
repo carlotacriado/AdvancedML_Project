@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import copy
 from tqdm import tqdm
-from utils.globals import *
+from Utils.globals import *
 
 def train_epoch(meta_model, train_loader, val_loader, n_way, k_shot, q_query, inner_lr, inner_steps, epsilon, device):
     """

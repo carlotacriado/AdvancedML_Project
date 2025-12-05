@@ -19,7 +19,7 @@ if __name__ == '__main__':
         transforms.ToTensor()
     ])
     
-    ds = PokemonMetaDataset('pokemon_data_linked.csv', 'pokemon_sprites', transform=transform_pipeline)
+    ds = PokemonMetaDataset('Data/pokemon_data_linked.csv', 'Data/pokemon_sprites', transform=transform_pipeline)
 
     # 2. Create Loaders
     # Train on Gen 1, 2, 3. Test on Gen 4.

@@ -5,7 +5,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 # --- TUS IMPORTACIONES ---
-# Asumo que tienes estos archivos creados con tus clases
 # from dataset import PokemonDataset
 # from samplers import EpisodicSampler
 # from models import MyHyperNetwork, TargetNetworkArchitecture

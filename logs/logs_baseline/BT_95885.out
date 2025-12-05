@@ -1,0 +1,8 @@
+[Info] Semilla global fijada en: 151
+--- Iniciando Entrenamiento Baseline (Seed: 151) ---
+--- Tarea: POKEDEX ---
+--- Splitting by GENERATION ---
+Train Classes: 309 | Test Classes: 107 | Validation Classes: 77
+
+--- Configurando Baseline Dataloaders (Task: POKEDEX) ---
+Baseline Pokedex: 309 clases (Especies).
