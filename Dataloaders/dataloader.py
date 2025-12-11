@@ -156,100 +156,114 @@ def get_structured_splits(dataset, split_mode='generation', train_vals=None, val
     
     print(f"--- Splitting by {split_mode.upper()} ---")
     
-    for label_idx in all_labels:
-        # 1. Fetch the specific metadata for this label
-        # (We use the lookups you created in __init__)
-        if split_mode == 'generation':
-            val = dataset.idx_to_gen[label_idx]
-        elif split_mode == 'type':
-            val = dataset.idx_to_type1[label_idx] # Primary type
-        elif split_mode == 'stage':
-            # 1: Basic, 2: Stage 1, 3: Stage 2
-            # You might need to clean your CSV logic if it uses strings like "Basic"
-            val = dataset.pokemon_info.iloc[label_idx]['evolution_stage'] 
-        else:
-            raise ValueError("Unknown split mode")
-
-        # 2. Sort into buckets
-        if val in train_vals:
-            train_labels.append(label_idx)
-        elif (val_vals is not None) and (val in val_vals):
-            val_labels.append(label_idx)
-        elif val in test_vals:
-            test_labels.append(label_idx)
+    # NORMAL RANDOM SPLIT
+    if split_mode == 'random':
+      random.shuffle(all_labels)
+      
+      n_total = len(all_labels)
+      
+      n_train = int(n_total * 0.6)
+      n_val = int(n_total * 0.2)
+      
+      train_labels = all_labels[:n_train]
+      val_labels = all_labels[n_train: n_train + n_val]
+      test_labels = all_labels[n_train + n_val:]
+      
+    else:    
+        for label_idx in all_labels:
+            # 1. Fetch the specific metadata for this label
+            # (We use the lookups you created in __init__)
+            if split_mode == 'generation':
+                val = dataset.idx_to_gen[label_idx]
+            elif split_mode == 'type':
+                val = dataset.idx_to_type1[label_idx] # Primary type
+            elif split_mode == 'stage':
+                # 1: Basic, 2: Stage 1, 3: Stage 2
+                # You might need to clean your CSV logic if it uses strings like "Basic"
+                val = dataset.pokemon_info.iloc[label_idx]['evolution_stage'] 
+            else:
+                raise ValueError("Unknown split mode")
     
-    if val_vals is None:
-        random.shuffle(train_labels)
+            # 2. Sort into buckets
+            if train_vals and val in train_vals:
+                train_labels.append(label_idx)
+            elif (val_vals is not None) and (val in val_vals):
+                val_labels.append(label_idx)
+            elif test_vals and val in test_vals:
+                test_labels.append(label_idx)
+      
+        if val_vals is None:
+            random.shuffle(train_labels)
 
-        num_total_train = len(train_labels)
-        num_val = int(num_total_train * VAL_SPLIT)
-        
-        val_labels = train_labels[:num_val]
-        train_labels = train_labels[num_val:]
+            num_total_train = len(train_labels)
+            num_val = int(num_total_train * VAL_SPLIT)
+            
+            val_labels = train_labels[:num_val]
+            train_labels = train_labels[num_val:]
             
     print(f"Train Classes: {len(train_labels)} | Test Classes: {len(test_labels)} | Validation Classes: {len(val_labels)}")
     return train_labels, test_labels, val_labels
 
-def get_meta_dataloaders_pokedex(dataset, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
+def get_meta_dataloaders_pokedex(train_ds, eval_ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
     
     # --- Train Loader ---
     # We manually inject the filtered labels into the sampler
     train_sampler = Pokedex(
-        dataset=dataset,
+        dataset=train_ds,
         target_labels=train_labels, 
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=2)
+    train_loader = DataLoader(train_ds, batch_sampler=train_sampler, num_workers=2)
 
     # --- Test Loader ---
     test_sampler = Pokedex(
-        dataset=dataset, 
+        dataset=eval_ds, 
         target_labels=test_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    test_loader = DataLoader(dataset, batch_sampler=test_sampler, num_workers=2)
+    test_loader = DataLoader(eval_ds, batch_sampler=test_sampler, num_workers=2)
 
     # --- Validation Loader ---
     val_sampler = Pokedex(
-        dataset=dataset, 
+        dataset=eval_ds, 
         target_labels=val_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    val_loader = DataLoader(dataset, batch_sampler=val_sampler, num_workers=2)
+    val_loader = DataLoader(eval_ds, batch_sampler=val_sampler, num_workers=2)
     
     return train_loader, test_loader, val_loader
 
-def get_meta_dataloaders_oak(dataset, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
+def get_meta_dataloaders_oak(train_ds, eval_ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
     
     # --- Train Loader ---
     # We manually inject the filtered labels into the sampler
     train_sampler = Oak(
-        dataset=dataset,
+        dataset=train_ds,
         target_labels=train_labels, 
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    train_loader = DataLoader(dataset, batch_sampler=train_sampler, num_workers=2)
+    train_loader = DataLoader(train_ds, batch_sampler=train_sampler, num_workers=2)
 
     # --- Test Loader ---
     test_sampler = Oak(
-        dataset=dataset, 
+        dataset=eval_ds, 
         target_labels=test_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    test_loader = DataLoader(dataset, batch_sampler=test_sampler, num_workers=2)
+    test_loader = DataLoader(eval_ds, batch_sampler=test_sampler, num_workers=2)
 
     # --- Validation Loader ---
     val_sampler = Oak(
-        dataset=dataset, 
+        dataset=eval_ds, 
         target_labels=val_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    val_loader = DataLoader(dataset, batch_sampler=val_sampler, num_workers=2)
+    val_loader = DataLoader(eval_ds, batch_sampler=val_sampler, num_workers=2)
     
     return train_loader, test_loader, val_loader
