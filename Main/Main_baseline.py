@@ -5,9 +5,11 @@ from torchvision import transforms
 import numpy as np
 import time
 from pathlib import Path
+import wandb
+import os
 
 # --- IMPORTS ---
-from Utils.utils import set_all_seeds, save_plots
+from Utils.utils import set_all_seeds
 from Dataloaders.dataloader_baseline import get_baseline_dataloaders
 from Dataloaders.dataloader import PokemonMetaDataset, get_structured_splits 
 from Models.Baseline import ConvBackbone, ClassifierHead
@@ -16,21 +18,25 @@ from Utils.globals import *
 # ==========================================
 # 1. CONFIGURACION Y HIPERPARAMETROS
 # ==========================================
-SEED = SEED if 'SEED' in globals() else 151        # La misma que usaras en Meta-Learning
-TASK = 'pokedex'     # Opciones: 'pokedex' (Especies) o 'oak' (Familias)
+SEED = 151
+TASK = 'pokedex'     # 'pokedex' o 'oak'
+SPLIT_MODE = 'random'
 BATCH_SIZE = 64
 LR = 1e-3
-EPOCHS = 30
+EPOCHS = MAX_EPOCHS  
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Rutas (Ajusta esto a tu proyecto)
+# WandB Config
+WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b" 
+WANDB_PROJECT = "Baseline_model"
+
+# Rutas
 CSV_PATH = "Data/pokemon_data_linked.csv"
 ROOT_DIR = "Data/pokemon_sprites"
 
 # ==========================================
-# 2. FIJAR SEMILLA (El paso mas importante)
+# 2. FIJAR SEMILLA
 # ==========================================
-# Esto garantiza que el split de datos sea identico al de tu experimento de Meta-Learning
 set_all_seeds(SEED)
 
 def train_epoch(model, loader, criterion, optimizer, device):
@@ -75,96 +81,123 @@ def validate(model, loader, criterion, device):
     return running_loss / len(loader), 100. * correct / total
 
 def main():
-    print(f"--- Iniciando Entrenamiento Baseline (Seed: {SEED}) ---")
-    print(f"--- Tarea: {TASK.upper()} ---")
-    
-    # ------------------------------------------
-    # 3. PREPARAR DATOS
-    # ------------------------------------------
-    transform_pipeline = transforms.Compose([
-      transforms.Resize((84,84)),
-      transforms.ToTensor()
-      ])
-    
-    dataset = PokemonMetaDataset(csv_file=CSV_PATH, root_dir=ROOT_DIR, transform=transform_pipeline) 
-    # NOTA: Anade tu transform (ToTensor, Resize) en el dataset si no lo has hecho ya dentro
-
-    # 3.1. Obtener los mismos Splits que en Meta-Learning
-    # Ajusta train_vals/val_vals segun tu experimento real
-    train_labels, test_labels, val_labels = get_structured_splits(
-        dataset, 
-        split_mode='generation', 
-        train_vals=['generation-i', 'generation-ii', 'generation-iii'],
-        # val_vals=['generation-iii'],        
-        test_vals=['generation-iv']
+    wandb.login(key=WANDB_KEY)
+    wandb.init(
+        project=WANDB_PROJECT,
+        name=f"Baseline_{TASK}_{SPLIT_MODE}_seed{SEED}_Augmented", # Anado tag Augmented
+        config={
+            "learning_rate": LR,
+            "architecture": "Conv4",
+            "dataset": "Pokemon",
+            "epochs": EPOCHS,
+            "batch_size": BATCH_SIZE,
+            "seed": SEED,
+            "task": TASK,
+            "split_mode": SPLIT_MODE,
+            "augmentation": True # Para que quede constancia en WandB
+        }
     )
 
-    # 3.2. Crear Dataloaders Baseline (Aqui ocurre la magia del mapeo)
+    print(f"--- Iniciando Entrenamiento Baseline CON AUGMENTATION (Seed: {SEED}) ---")
+    
+    # 3.1 Definir Transformaciones
+    # Transformacion LIMPIA (Para validacion y splits)
+    eval_transform = transforms.Compose([
+        transforms.Resize((84,84)),
+        transforms.ToTensor()
+    ])
+
+    # Transformacion AUMENTADA (Igual que en Reptile)
+    # Nota: Reptile usaba Resize 120 -> RandomCrop 84. Esto es clave.
+    train_transform = transforms.Compose([
+        transforms.Resize((120, 120)),            
+        transforms.RandomCrop((84, 84)),          
+        transforms.RandomHorizontalFlip(p=0.5),   
+        transforms.RandomRotation(degrees=15),    
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2), 
+        transforms.ToTensor()
+    ])
+    
+    # 3.2 Crear DOS Datasets
+    # Este se usa para calcular que pokemons van a train/val (porque no altera los IDs)
+    # y para la validacion real.
+    val_dataset = PokemonMetaDataset(csv_file=CSV_PATH, root_dir=ROOT_DIR, transform=eval_transform)
+    
+    # Este se usa SOLO para alimentar el train_loader con imagenes variadas
+    train_dataset = PokemonMetaDataset(csv_file=CSV_PATH, root_dir=ROOT_DIR, transform=train_transform)
+
+    # 3.3 Obtener los Splits (usando el dataset limpio)
+    if SPLIT_MODE == 'random':
+        train_labels, test_labels, val_labels = get_structured_splits(val_dataset, split_mode='random')
+    else:
+        train_labels, test_labels, val_labels = get_structured_splits(
+            val_dataset, 
+            split_mode='generation', 
+            train_vals=['generation-i', 'generation-ii', 'generation-iii'],
+            test_vals=['generation-iv']
+        )
+    
+    # 3.4 Crear Dataloaders con la nueva funcion que acepta dos datasets
     train_loader, val_loader, num_classes = get_baseline_dataloaders(
-        dataset, 
-        train_labels, 
-        val_labels, 
-        task_mode=TASK, 
-        batch_size=BATCH_SIZE, 
+        train_dataset=train_dataset,  # Pasa el dataset aumentado
+        val_dataset=val_dataset,      # Pasa el dataset limpio
+        train_labels=train_labels,    # Labels permitidos
+        task_mode=TASK,
+        batch_size=BATCH_SIZE,
         seed=SEED
     )
     
     print(f"Clases de salida detectadas: {num_classes}")
 
     # ------------------------------------------
-    # 4. INICIALIZAR MODELO
+    # 4. INICIALIZAR MODELO (Igual que antes)
     # ------------------------------------------
     backbone = ConvBackbone()
-    
-    # IMPORTANTE: Inicializamos la cabeza con el numero exacto de clases activas
-    # Si TASK='pokedex', num_classes sera ~60
-    # Si TASK='oak', num_classes sera ~25
     classifier = ClassifierHead(num_classes=num_classes)
-    
     full_model = nn.Sequential(backbone, classifier).to(DEVICE)
     
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(full_model.parameters(), lr=LR)
+    
+    wandb.watch(full_model, log="all")
 
     # ------------------------------------------
-    # 5. BUCLE DE ENTRENAMIENTO
+    # 5. BUCLE DE ENTRENAMIENTO (Igual que antes)
     # ------------------------------------------
     best_acc = 0.0
     
-    history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
+    # Crear directorio si no existe
+    save_dir = "Results/Models_pth/Baseline_pth"
+    os.makedirs(save_dir, exist_ok=True)
+
     for epoch in range(EPOCHS):
         start_time = time.time()
         
         train_loss, train_acc = train_epoch(full_model, train_loader, criterion, optimizer, DEVICE)
         val_loss, val_acc = validate(full_model, val_loader, criterion, DEVICE)
         
-        history['train_loss'].append(train_loss)
-        history['val_loss'].append(val_loss)
-        history['train_acc'].append(train_acc)
-        history['val_acc'].append(val_acc)
-        
         elapsed = time.time() - start_time
+        
+        wandb.log({
+            "epoch": epoch + 1,
+            "train_loss": train_loss,
+            "train_acc": train_acc,
+            "val_loss": val_loss,
+            "val_acc": val_acc
+        })
         
         print(f"Epoch {epoch+1}/{EPOCHS} | Time: {elapsed:.1f}s")
         print(f"  Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}%")
         print(f"  Val Loss:   {val_loss:.4f} | Val Acc:   {val_acc:.2f}%")
         
-        # Guardar el mejor modelo
         if val_acc > best_acc:
             best_acc = val_acc
-            save_path = f"baseline_{TASK}_seed{SEED}.pth"
+            save_path = os.path.join(save_dir, f"baseline_{TASK}_{SPLIT_MODE}_seed{SEED}_aug.pth")
             torch.save(full_model.state_dict(), save_path)
             print(f"  --> Modelo guardado en {save_path}")
 
     print(f"\nEntrenamiento finalizado. Mejor Val Acc: {best_acc:.2f}%")
-
-    save_plots(
-        history['train_acc'], 
-        history['val_acc'], 
-        history['train_loss'], 
-        history['val_loss'], 
-        filename=f"curves_{TASK}_seed{SEED}.png"
-    )
+    wandb.finish()
     
 if __name__ == '__main__':
     main()

@@ -204,66 +204,66 @@ def get_structured_splits(dataset, split_mode='generation', train_vals=None, val
     print(f"Train Classes: {len(train_labels)} | Test Classes: {len(test_labels)} | Validation Classes: {len(val_labels)}")
     return train_labels, test_labels, val_labels
 
-def get_meta_dataloaders_pokedex(train_ds, eval_ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
+def get_meta_dataloaders_pokedex(tds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
     
     # --- Train Loader ---
     # We manually inject the filtered labels into the sampler
     train_sampler = Pokedex(
-        dataset=train_ds,
+        dataset=ds,
         target_labels=train_labels, 
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    train_loader = DataLoader(train_ds, batch_sampler=train_sampler, num_workers=2)
+    train_loader = DataLoader(ds, batch_sampler=train_sampler, num_workers=2)
 
     # --- Test Loader ---
     test_sampler = Pokedex(
-        dataset=eval_ds, 
+        dataset=ds, 
         target_labels=test_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    test_loader = DataLoader(eval_ds, batch_sampler=test_sampler, num_workers=2)
+    test_loader = DataLoader(ds, batch_sampler=test_sampler, num_workers=2)
 
     # --- Validation Loader ---
     val_sampler = Pokedex(
-        dataset=eval_ds, 
+        dataset=ds, 
         target_labels=val_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    val_loader = DataLoader(eval_ds, batch_sampler=val_sampler, num_workers=2)
+    val_loader = DataLoader(ds, batch_sampler=val_sampler, num_workers=2)
     
     return train_loader, test_loader, val_loader
 
-def get_meta_dataloaders_oak(train_ds, eval_ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
+def get_meta_dataloaders_oak(ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
     
     # --- Train Loader ---
     # We manually inject the filtered labels into the sampler
     train_sampler = Oak(
-        dataset=train_ds,
+        dataset=ds,
         target_labels=train_labels, 
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    train_loader = DataLoader(train_ds, batch_sampler=train_sampler, num_workers=2)
+    train_loader = DataLoader(ds, batch_sampler=train_sampler, num_workers=2)
 
     # --- Test Loader ---
     test_sampler = Oak(
-        dataset=eval_ds, 
+        dataset=ds, 
         target_labels=test_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    test_loader = DataLoader(eval_ds, batch_sampler=test_sampler, num_workers=2)
+    test_loader = DataLoader(ds, batch_sampler=test_sampler, num_workers=2)
 
     # --- Validation Loader ---
     val_sampler = Oak(
-        dataset=eval_ds, 
+        dataset=ds, 
         target_labels=val_labels,
         n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
     )
     
-    val_loader = DataLoader(eval_ds, batch_sampler=val_sampler, num_workers=2)
+    val_loader = DataLoader(ds, batch_sampler=val_sampler, num_workers=2)
     
     return train_loader, test_loader, val_loader

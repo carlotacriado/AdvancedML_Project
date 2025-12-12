@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import copy
 from tqdm import tqdm
+import wandb
 from Utils.globals import *
 
 def train_epoch(meta_model, train_loader, val_loader, n_way, k_shot, q_query, inner_lr, inner_steps, epsilon, device):
@@ -18,16 +19,19 @@ def train_epoch(meta_model, train_loader, val_loader, n_way, k_shot, q_query, in
         images = images.to(device)
         
         # --- 1. MANUALLY PREPARE DATA ---
-        # Input shape: [Batch_Size, C, H, W] where Batch_Size = N_way * (K_shot + Q_query)
-        # Reshape to: [N_way, K+Q, C, H, W]
+        # Input shape: [Batch_Size, C, H, W] where Batch_Size = n_way * (K_shot + Q_query)
+        # Reshape to: [n_way, K+Q, C, H, W]
         data = images.view(n_way, k_shot + q_query, 3, 84, 84)
 
         # Split Support and Query
-        # x_support: [N_way * K_shot, C, H, W]
+        # x_support: [n_way * K_shot, C, H, W]
         x_support = data[:, :k_shot].contiguous().view(-1, 3, 84, 84)
         y_support = torch.arange(n_way).repeat_interleave(k_shot).to(device)
+
+        # Apply data augmentation ONLY to support set
+        x_support = apply_support_aug(x_support)
         
-        # x_query: [N_way * Q_query, C, H, W]
+        # x_query: [n_way * Q_query, C, H, W]
         x_query   = data[:, k_shot:].contiguous().view(-1, 3, 84, 84)
         y_query   = torch.arange(n_way).repeat_interleave(q_query).to(device)
 
@@ -79,6 +83,9 @@ def evaluate(meta_model, test_loader, n_way, k_shot, q_query, inner_lr, inner_st
 
             x_support = data[:, :k_shot].contiguous().view(-1, 3, 84, 84)
             y_support = torch.arange(n_way).repeat_interleave(k_shot).to(device)
+
+            # Apply data augmentation ONLY to support set
+            x_support = apply_support_aug(x_support)
             
             x_query   = data[:, k_shot:].contiguous().view(-1, 3, 84, 84)
             y_query   = torch.arange(n_way).repeat_interleave(q_query).to(device)
@@ -108,7 +115,22 @@ def evaluate(meta_model, test_loader, n_way, k_shot, q_query, inner_lr, inner_st
 
     return total_acc / len(test_loader)
 
-def train_reptile(meta_model, train_loader, test_loader, val_loader, device):
+def train_reptile(meta_model, train_loader, test_loader, val_loader, device, n_way, n_shot, n_query):
+    wandb.login(key="93d025aa0577b011c6d4081b9d4dc7daeb60ee6b")
+    wandb.init(
+        project=f"Pokemon-Reptile", # Change this to your project name
+        name=f"reptile-random-{n_way}-{n_shot}",    # Optional: Name of this specific run
+        config={
+            "n_way": n_way,
+            "n_shot": n_shot,
+            "n_query": n_query,
+            "inner_lr": INNER_LR,
+            "inner_steps": INNER_STEPS,
+            "epsilon": EPSILON,
+            "max_epochs": MAX_EPOCHS,
+            "episodes_per_epoch": EPISODES_PER_EPOCH,
+        }
+    )
     print(f"Starting Training: {MAX_EPOCHS} Epochs x {EPISODES_PER_EPOCH} Episodes = {MAX_EPOCHS*EPISODES_PER_EPOCH} Total Episodes")
     
     best_val_acc = 0.0
@@ -118,34 +140,39 @@ def train_reptile(meta_model, train_loader, test_loader, val_loader, device):
         # A. TRAIN ONE EPOCH
         avg_loss = train_epoch(
             meta_model, train_loader, val_loader,
-            N_WAY, N_SHOT, N_QUERY, 
+            n_way, n_shot, n_query, 
             INNER_LR, INNER_STEPS, EPSILON, device
         )
         
+        wandb.log({"train/loss": avg_loss, "epoch": epoch})
         # B. VALIDATE EVERY X EPOCHS
         if epoch % 5 == 0:
             val_acc = evaluate(
                 meta_model, val_loader, 
-                N_WAY, N_SHOT, N_QUERY, 
+                n_way, n_shot, n_query, 
                 INNER_LR, INNER_STEPS, device
             )
-            
+
+            wandb.log({"val/accuracy": val_acc, "epoch": epoch})
             print(f"Epoch {epoch}: Train Loss {avg_loss:.4f} | Val Acc {val_acc*100:.2f}%")
             
             # Save Best
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
-                torch.save(meta_model.state_dict(), "best_pokemon_reptile.pth")
+                torch.save(meta_model.state_dict(), f"Results/Models_pth/Reptile_pth/reptile-random-{n_way}-{n_shot}.pth")
                 print(" -> New Best Model Saved!")
         else:
             print(f"Epoch {epoch}: Train Loss {avg_loss:.4f}")
 
     print("\n--- Training Finished. Running Final Test ---")
-    meta_model.load_state_dict(torch.load("best_pokemon_reptile.pth"))
+    meta_model.load_state_dict(torch.load(f"Results/Models_pth/Reptile_pth/reptile-random-{n_way}-{n_shot}.pth"))
     
     test_acc = evaluate(
         meta_model, test_loader, 
-        N_WAY, N_SHOT, N_QUERY, 
+        n_way, n_shot, n_query, 
         INNER_LR, INNER_STEPS, device
     )
+    wandb.log({"test/accuracy": test_acc})
     print(f"Final Test Accuracy: {test_acc*100:.2f}%")
+
+    wandb.finish()

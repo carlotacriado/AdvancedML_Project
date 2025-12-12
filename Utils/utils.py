@@ -193,3 +193,10 @@ def save_plots(train_acc, val_acc, train_loss, val_loss, filename="training_curv
     plt.savefig(filename)
     plt.close() # Cierra la figura para liberar memoria
     print(f"[Info] Gráfico guardado en: {filename}")
+    
+def apply_support_aug(x_support):
+    """
+    Applies augmentation to the support set tensor.
+    x_support shape: [N_support_total, 3, 84, 84]
+    """
+    return SUPPORT_AUGMENTATIONS(x_support)
