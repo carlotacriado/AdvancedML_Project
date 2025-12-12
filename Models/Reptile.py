@@ -5,6 +5,7 @@ import copy
 from tqdm import tqdm
 import wandb
 from Utils.globals import *
+from Utils.utils import *
 
 def train_epoch(meta_model, train_loader, val_loader, n_way, k_shot, q_query, inner_lr, inner_steps, epsilon, device):
     """
@@ -30,6 +31,14 @@ def train_epoch(meta_model, train_loader, val_loader, n_way, k_shot, q_query, in
 
         # Apply data augmentation ONLY to support set
         x_support = apply_support_aug(x_support)
+
+        # --- DEBUG VISUALIZATION (Run only once per epoch) ---
+        if batch_idx == 0:
+            save_support_visualization(
+                x_support, 
+                y_support, 
+                file_name=f"train_aug_debug_epoch_{batch_idx}.png" # You might want to pass actual epoch num if available
+            )
         
         # x_query: [n_way * Q_query, C, H, W]
         x_query   = data[:, k_shot:].contiguous().view(-1, 3, 84, 84)

@@ -1,4 +1,5 @@
 import torch
+from Utils.utils import apply_support_aug
 
 def split_batch(imgs, targets, n_way, k_shot, q_query, device):
     """
@@ -18,6 +19,7 @@ def split_batch(imgs, targets, n_way, k_shot, q_query, device):
     # 2. Separar Support y Query
     # Support: Tomamos los primeros K de cada clase
     support_imgs = imgs_reshaped[:, :k_shot].reshape(-1, c, h, w) # [N*K, C, H, W]
+    support_imgs = apply_support_aug(support_imgs)
     
     # Query: Tomamos los últimos Q de cada clase
     query_imgs = imgs_reshaped[:, k_shot:].reshape(-1, c, h, w)   # [N*Q, C, H, W]

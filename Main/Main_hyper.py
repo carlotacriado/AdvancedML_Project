@@ -32,14 +32,14 @@ EMBEDDING_SIZE = 128 * 5 * 5 # 3200 features salen del Conv4 antes del flatten
 # A MENOS QUE cambies el backbone para tener un FC final.
 # Vamos a asumir que usas el ConvBackbone tal cual: output es 3200.
 
-WANDB_PROJECT = "Hypernetwork_combinations"
+WANDB_PROJECT = "Hypernetwork_data_augmentation"
 WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b"
 
 def main():
     wandb.login(key=WANDB_KEY)
 
     # Crear carpeta para guardar modelos si no existe
-    save_dir = "Results/Models_pth/Hypernetwork_pth"
+    save_dir = "Results/Models_pth/Hypernetwork_pth/data_augm"
     os.makedirs(save_dir, exist_ok=True)
     
     for N_WAY in N_WAY_LIST:
@@ -72,12 +72,8 @@ def main():
 
 
             # 2. DATASETS
-            transform = transforms.Compose([
-                transforms.Resize((84,84)),
-                transforms.ToTensor()
-            ])
             dataset = PokemonMetaDataset(csv_file="Data/pokemon_data_linked.csv", root_dir="Data/pokemon_sprites", transform=transform)
-
+            
             # Splits
             if SPLIT_MODE == 'random':
                 train_labels, test_labels, val_labels = get_structured_splits(dataset, split_mode='random')

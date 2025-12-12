@@ -1,4 +1,5 @@
 import torch
+import torchvision
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -200,3 +201,38 @@ def apply_support_aug(x_support):
     x_support shape: [N_support_total, 3, 84, 84]
     """
     return SUPPORT_AUGMENTATIONS(x_support)
+
+def denormalize(tensor):
+    """
+    Reverses the ImageNet normalization for visualization.
+    Assumes standard mean=[0.485, 0.456, 0.406] and std=[0.229, 0.224, 0.225].
+    Adjust if you used different values in EVAL_TRANSFORMS.
+    """
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(tensor.device)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(tensor.device)
+    return tensor * std + mean
+
+def save_support_visualization(x_support, y_support, file_name="debug_support_aug.png"):
+    """
+    Saves a grid of augmented support images with their labels.
+    x_support: [Batch, 3, H, W] tensor (augmented)
+    y_support: [Batch] tensor (labels)
+    """
+    # 1. Denormalize to get back to [0, 1] range for valid image saving
+    images = denormalize(x_support.clone())
+    
+    # 2. Clip values just in case augmentation pushed them slightly outside [0,1]
+    images = torch.clamp(images, 0, 1)
+    
+    # 3. Create a Grid
+    # nrow=5 means 5 images per row. Adjust based on your N_SHOT.
+    grid_img = torchvision.utils.make_grid(images, nrow=5, padding=2)
+    
+    # 4. Save to disk
+    # We use torchvision.utils.save_image which expects [C, H, W]
+    os.makedirs("Results/Debug", exist_ok=True)
+    save_path = os.path.join("Results/Debug", file_name)
+    torchvision.utils.save_image(grid_img, save_path)
+    
+    print(f"Saved visualization debug grid to: {save_path}")
+    print(f"Labels in this grid: {y_support.tolist()}")

@@ -204,7 +204,7 @@ def get_structured_splits(dataset, split_mode='generation', train_vals=None, val
     print(f"Train Classes: {len(train_labels)} | Test Classes: {len(test_labels)} | Validation Classes: {len(val_labels)}")
     return train_labels, test_labels, val_labels
 
-def get_meta_dataloaders_pokedex(tds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
+def get_meta_dataloaders_pokedex(ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
     
     # --- Train Loader ---
     # We manually inject the filtered labels into the sampler
