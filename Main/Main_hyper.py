@@ -72,7 +72,7 @@ def main():
 
 
             # 2. DATASETS
-            dataset = PokemonMetaDataset(csv_file="Data/pokemon_data_linked.csv", root_dir="Data/pokemon_sprites", transform=transform)
+            dataset = PokemonMetaDataset(csv_file="Data/pokemon_data_linked.csv", root_dir="Data/pokemon_sprites", transform=EVAL_TRANSFORMS)
             
             # Splits
             if SPLIT_MODE == 'random':
@@ -89,7 +89,7 @@ def main():
             
             # Pasamos las variables del bucle actual
             train_loader, test_loader, val_loader = loader_func(
-                dataset, dataset, train_labels, test_labels, val_labels,
+                dataset, train_labels, test_labels, val_labels,
                 n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY, episodes=EPISODES_PER_EPOCH
                 )
 
