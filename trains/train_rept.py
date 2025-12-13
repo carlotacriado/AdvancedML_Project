@@ -28,8 +28,8 @@ if __name__ == '__main__':
     # train_labels, test_labels, val_labels = get_structured_splits(
     #     ds, 
     #     split_mode='generation', 
-    #     train_vals=['generation-i', 'generation-ii', 'generation-iii'],
-    #     #val_vals=['generation-iii'],
+    #     train_vals=['generation-i', 'generation-iii'],
+    #     #val_vals=['generation-ii'],
     #     test_vals=['generation-iv']
     # )
     
@@ -37,8 +37,9 @@ if __name__ == '__main__':
     # train_labels, test_labels, val_labels = get_structured_splits(
     #     ds, 
     #     split_mode='type', 
-    #     train_vals=['fairy', 'steel', 'dark', 'dragon', 'ghost', 'rock', 'bug', 'psychic', 'flying', 'water', 'fire', 'grass'],
-    #     test_vals=['ice', 'ground', 'poison', 'fighting', 'electric', 'normal']
+    #     train_vals=['fairy', 'dark', 'dragon', 'rock', 'bug', 'psychic', 'flying', 'water', 'fire', 'grass'],
+    #     val_vals=['steel', 'ground', 'ghost']
+    #     test_vals=['ice', 'poison', 'fighting', 'electric', 'normal']
     # )
 
     # -- RANDOM PARTITION --
