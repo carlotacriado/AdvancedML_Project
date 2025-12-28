@@ -5,6 +5,11 @@ This repository hosts the development of a project investigating the application
 ## 📂 Repository Guide
 To help you navigate the code, here is a detailed breakdown of the folder structure and the purpose of each component.
 
+### 1. Data
+* **`pokemon_data_linked.csv`**: Expliación
+* **`pokemon_sprites2.tar.gz`**: Explicación
+
+
 ADVANCEDML_PROJECT/
 ├── Data/
       ├── pokemon_data_linked.csv --> Explicación
