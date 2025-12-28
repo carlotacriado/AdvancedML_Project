@@ -15,11 +15,12 @@ if __name__ == '__main__':
     set_all_seeds(SEED)
 
     # 1. Initialize Dataset
-    # -- NO DATA AUGMENTATION --
-
     transform_pipeline = EVAL_TRANSFORMS
+    augment_pipeline = TRAIN_TRANSFORMS
 
-    
+    # Augmented DS
+    augmented_ds = PokemonMetaDataset('Data/pokemon_data_linked.csv', 'Data/pokemon_sprites', transform=augment_pipeline)
+    # Not Augmented DS
     ds = PokemonMetaDataset('Data/pokemon_data_linked.csv', 'Data/pokemon_sprites', transform=transform_pipeline)
 
     # 2. Create Loaders
@@ -29,7 +30,7 @@ if __name__ == '__main__':
     #     ds, 
     #     split_mode='generation', 
     #     train_vals=['generation-i', 'generation-iii'],
-    #     #val_vals=['generation-ii'],
+    #     val_vals=['generation-ii'],
     #     test_vals=['generation-iv']
     # )
     
@@ -38,7 +39,7 @@ if __name__ == '__main__':
     #     ds, 
     #     split_mode='type', 
     #     train_vals=['fairy', 'dark', 'dragon', 'rock', 'bug', 'psychic', 'flying', 'water', 'fire', 'grass'],
-    #     val_vals=['steel', 'ground', 'ghost']
+    #     val_vals=['steel', 'ground', 'ghost'],
     #     test_vals=['ice', 'poison', 'fighting', 'electric', 'normal']
     # )
 
@@ -48,11 +49,12 @@ if __name__ == '__main__':
         split_mode='random'
     )
 
-    for n_way in [2,3,4,5]: #
-        for n_shot in [1,2,3,4,5]: #
-            train_loader, test_loader, val_loader = get_meta_dataloaders_pokedex(ds, train_labels, test_labels, val_labels, n_way, n_shot, N_QUERY, EPISODES_PER_EPOCH)
+    for n_way in [2,3,4,5]:
+        for n_shot in [1,2,3,4,5]:
+
+            train_loader, test_loader, val_loader = get_meta_dataloaders_pokedex(ds, augmented_ds, train_labels, test_labels, val_labels, n_way, n_shot, N_QUERY, EPISODES_PER_EPOCH)
             
-            oak_train_loader, oak_test_loader, oak_val_loader = get_meta_dataloaders_oak(ds, train_labels, test_labels, val_labels, n_way, n_shot, N_QUERY, EPISODES_PER_EPOCH)
+            oak_train_loader, oak_test_loader, oak_val_loader = get_meta_dataloaders_oak(ds, augmented_ds, train_labels, test_labels, val_labels, n_way, n_shot, N_QUERY, EPISODES_PER_EPOCH)
 
             # 3. INITIALIZE MODEL
             print("Initializing Model...")
@@ -60,4 +62,4 @@ if __name__ == '__main__':
             meta_model = ConvBackbone().to(device)
 
             # 4. START TRAINING
-            train_reptile(meta_model, train_loader, test_loader, val_loader, device, n_way, n_shot, N_QUERY)
+            train_reptile(meta_model, oak_train_loader, oak_test_loader, oak_val_loader, device, n_way, n_shot, N_QUERY)

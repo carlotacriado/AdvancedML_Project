@@ -1,66 +1,71 @@
-import os
-import pandas as pd
-import numpy as np
-from PIL import Image
-from torch.utils.data import Dataset
-from torchvision import transforms
 import torch
 import torch.nn as nn
 
-conv_num_features = 128 
+# --- CONFIGURATION ---
+CONV_NUM_FEATURES = 128
+INPUT_IMAGE_SIZE = 84
 
 class ConvBackbone(nn.Module):
-    """Arquitectura Conv-4 adaptada para Pokémon (Input 84x84)"""
-    def __init__(self, in_channels=3, num_features=conv_num_features):
+    """
+    Conv-4 Backbone Architecture.
+    Designed for input images of size 84x84 (Standard for Few-Shot Learning / ProtoNets).
+    """
+    def __init__(self, in_channels=3, num_features=CONV_NUM_FEATURES):
         super().__init__()
 
-        # Input: (B, 3, 84, 84)
-        self.conv1 = nn.Conv2d(in_channels, num_features, 3, padding=1)
+        # Block 1: Input (Batch, 3, 84, 84)
+        self.conv1 = nn.Conv2d(in_channels, num_features, kernel_size=3, padding=1)
         self.norm1 = nn.GroupNorm(num_groups=num_features//4, num_channels=num_features)
         
-        self.conv2 = nn.Conv2d(num_features, num_features, 3, padding=1)
+        # Block 2
+        self.conv2 = nn.Conv2d(num_features, num_features, kernel_size=3, padding=1)
         self.norm2 = nn.GroupNorm(num_groups=num_features//4, num_channels=num_features)
 
-        self.conv3 = nn.Conv2d(num_features, num_features, 3, padding=1)
+        # Block 3
+        self.conv3 = nn.Conv2d(num_features, num_features, kernel_size=3, padding=1)
         self.norm3 = nn.GroupNorm(num_groups=num_features//4, num_channels=num_features)
         
-        self.conv4 = nn.Conv2d(num_features, num_features, 3, padding=1)
+        # Block 4
+        self.conv4 = nn.Conv2d(num_features, num_features, kernel_size=3, padding=1)
         self.norm4 = nn.GroupNorm(num_groups=num_features//4, num_channels=num_features)
 
+        # Shared layers
         self.maxpool = nn.MaxPool2d(2)
         self.relu = nn.ReLU()
-        
-        # Detectar GPU automáticamente
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.to(self.device)
 
     def forward(self, x):
-        x = x.to(self.device)
-        # 84 -> 42
+        # Block 1: 84x84 -> 42x42
         x = self.maxpool(self.relu(self.norm1(self.conv1(x))))
-        # 42 -> 21
+        
+        # Block 2: 42x42 -> 21x21
         x = self.maxpool(self.relu(self.norm2(self.conv2(x))))
-        # 21 -> 10
+        
+        # Block 3: 21x21 -> 10x10 (Padding allows for keeping size, MaxPool halves it)
         x = self.maxpool(self.relu(self.norm3(self.conv3(x))))
-        # 10 -> 5
+        
+        # Block 4: 10x10 -> 5x5
+        # Note: The original code did not apply ReLU in the final block, keeping features raw before the classifier.
         x = self.maxpool(self.norm4(self.conv4(x)))
         
-        # Output final: 5x5x128. Aplanamos.
+        # Flatten: (Batch, 128, 5, 5) -> (Batch, 3200)
         x = x.view(x.size(0), -1) 
         return x
 
 class ClassifierHead(nn.Module):
-    def __init__(self, num_classes, input_size=conv_num_features*5*5, dropout=True):
-        # NOTA: input_size es 128 * 5 * 5 = 3200 features
+    """
+    Simple Linear Classifier Head.
+    """
+    def __init__(self, num_classes, input_size=CONV_NUM_FEATURES*5*5, dropout=True):
         super().__init__()
+        
+        # Default input size calculation: 128 * 5 * 5 = 3200 features
         self.fc = nn.Linear(input_size, num_classes)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(0.5) if dropout else nn.Identity()
-        
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.to(self.device)
 
     def forward(self, x):
-        x = x.to(self.device)
-        x = self.fc(self.relu(self.dropout(x)))
+        # Apply activation and dropout before the final projection
+        x = self.dropout(x)
+        x = self.relu(x)
+        x = self.fc(x)
         return x

@@ -17,7 +17,7 @@ from Models.Hypernetwork import HyperNetworkModel # Tu nuevo modelo
 from trains.train_hyper import train_episode, validate_episode # Las funciones de arriba
 
 # --- CONFIG ---
-TASK = 'pokedex'  # 'pokedex' o 'oak'
+TASK = 'oak'  # 'pokedex' o 'oak'
 SPLIT_MODE = 'random' # 'random' o 'generation'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -32,14 +32,14 @@ EMBEDDING_SIZE = 128 * 5 * 5 # 3200 features salen del Conv4 antes del flatten
 # A MENOS QUE cambies el backbone para tener un FC final.
 # Vamos a asumir que usas el ConvBackbone tal cual: output es 3200.
 
-WANDB_PROJECT = "Hypernetwork_data_augmentation"
+WANDB_PROJECT = "Hypernetwork_oak"
 WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b"
 
 def main():
     wandb.login(key=WANDB_KEY)
 
     # Crear carpeta para guardar modelos si no existe
-    save_dir = "Results/Models_pth/Hypernetwork_pth/data_augm"
+    save_dir = "Results/Models_pth/Hypernetwork_pth/oak"
     os.makedirs(save_dir, exist_ok=True)
     
     for N_WAY in N_WAY_LIST:
@@ -79,9 +79,10 @@ def main():
                 train_labels, test_labels, val_labels = get_structured_splits(dataset, split_mode='random')
             else:
                 train_labels, test_labels, val_labels = get_structured_splits(
-                dataset, split_mode='generation', 
-                train_vals=['generation-i', 'generation-ii', 'generation-iii'],
-                test_vals=['generation-iv']
+                dataset, split_mode='type', 
+                train_vals=['fairy', 'dark', 'dragon', 'rock', 'bug', 'psychic', 'flying', 'water', 'fire', 'grass'],
+                val_vals=['steel', 'ground', 'ghost'],
+                test_vals=['ice', 'poison', 'fighting', 'electric', 'normal']
                 )
 
             # Loaders (Episodic)
@@ -89,7 +90,7 @@ def main():
             
             # Pasamos las variables del bucle actual
             train_loader, test_loader, val_loader = loader_func(
-                dataset, train_labels, test_labels, val_labels,
+                dataset, None, train_labels, test_labels, val_labels,
                 n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY, episodes=EPISODES_PER_EPOCH
                 )
 

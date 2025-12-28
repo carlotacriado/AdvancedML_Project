@@ -10,11 +10,12 @@ import random
 from Utils.globals import *
 from Utils.utils import *
 
-class Pokedex(Sampler): # Task Who's That Pokémon
+class Pokedex(Sampler): # Task 1: Guessing the Pokémon
     def __init__(self, dataset, target_labels, n_way, n_shot, n_query, n_episodes):
         """
         Args:
             dataset: Instance of PokemonMetaDataset
+            target_labels: True label for each instance
             n_way: Number of classes (Pokemon) per episode
             n_shot: Number of support images per class
             n_query: Number of query images per class
@@ -32,7 +33,6 @@ class Pokedex(Sampler): # Task Who's That Pokémon
 
         for label in target_labels:
             if label in dataset.indices_by_label:
-                 # 2. Count Check: Do we have enough images?
                 # We need at least (K_SHOT + Q_QUERY) images to make a valid task
                 image_indices = dataset.indices_by_label[label]
                 required_count = n_shot + n_query
@@ -68,7 +68,7 @@ class Pokedex(Sampler): # Task Who's That Pokémon
     def __len__(self):
         return self.n_episodes
     
-class Oak(Sampler): # Task: Same Evolution Line, Different Stage
+class Oak(Sampler): # Task 2: Which Pokémon are from the same evolution line?
     def __init__(self, dataset, target_labels, n_way, n_shot, n_query, n_episodes):
         """
         Args:
@@ -91,7 +91,7 @@ class Oak(Sampler): # Task: Same Evolution Line, Different Stage
             if label in dataset.indices_by_label:
                 fam_id = dataset.idx_to_family[label]
                 
-                if fam_id not in self.families: #This should never happen, but just in case ig
+                if fam_id not in self.families: #This should never happen, but just in case
                     self.families[fam_id] = []
                 self.families[fam_id].append(label)
         
@@ -124,7 +124,7 @@ class Oak(Sampler): # Task: Same Evolution Line, Different Stage
             # We pick indices from our list of valid families
             selected_fam_indices = np.random.choice(len(self.valid_families), self.n_way, replace=False)
             
-            for f_idx in selected_fam_indices: # type: ignore
+            for f_idx in selected_fam_indices:
                 family_members = self.valid_families[f_idx]
                 
                 # 2. Select Two DIFFERENT Pokemon (Stages) from this family
@@ -142,7 +142,6 @@ class Oak(Sampler): # Task: Same Evolution Line, Different Stage
                 query_imgs = np.random.choice(indices_b, self.n_query, replace=False)
                 
                 # 4. Add to batch
-                # Output structure: [Supp_Fam1..., Query_Fam1..., Supp_Fam2..., Query_Fam2...]
                 batch_indices.extend(support_imgs)
                 batch_indices.extend(query_imgs)
             

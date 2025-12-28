@@ -32,10 +32,9 @@ class PokemonMetaDataset(Dataset):
         for idx, row in self.pokemon_info.iterrows():
             dex_str = str(row['dex_number']).zfill(3)
             name_str = row['name'].lower()
-            folder_name = f"{dex_str}-{name_str}" # Using dash based on your previous msg
+            folder_name = f"{dex_str}-{name_str}"
             folder_path = os.path.join(root_dir, folder_name)
             
-            # Initialize list for this label index
             if idx not in self.indices_by_label:
                 self.indices_by_label[idx] = []
 
@@ -43,12 +42,10 @@ class PokemonMetaDataset(Dataset):
                 images = list(Path(folder_path).glob('*.*'))
                 for img_path in images:
                     if img_path.suffix.lower() in ['.jpg', '.png']:
-                        # The current length of self.samples is the index of this new image
                         current_idx = len(self.samples)
                         
                         self.samples.append((str(img_path), idx))
                         
-                        # Add this index to the class bucket
                         self.indices_by_label[idx].append(current_idx)
 
     def __len__(self):
@@ -60,7 +57,7 @@ class PokemonMetaDataset(Dataset):
         2. Detects solid black backgrounds and Flood Fills them to white.
         """
         image = Image.open(path)
-        image = image.convert('RGBA') # Convert everything to RGBA first
+        image = image.convert('RGBA')
         
         # --- Step 1: Handle Existing Transparency ---
         # Create a white canvas
@@ -81,8 +78,6 @@ class PokemonMetaDataset(Dataset):
         
         if np.all(top_left_pixel < 15): 
             # FLOOD FILL: simple and fast
-            # cv2.floodFill(image, mask, seedPoint, newVal)
-            # loDiff and upDiff allow for slight variations in the black color
             h, w = np_img.shape[:2]
             mask = np.zeros((h+2, w+2), np.uint8) # Mask must be 2 pixels larger
             
@@ -113,7 +108,6 @@ class PokemonMetaDataset(Dataset):
     def __getitem__(self, idx):
         img_path, label_idx = self.samples[idx]
         
-        # USE THE NEW HELPER FUNCTION HERE
         image = self._load_and_fix_transparency(img_path)
         
         if self.transform:
@@ -122,7 +116,7 @@ class PokemonMetaDataset(Dataset):
         return image, label_idx
     
     def get_pokemon_details(self, label_idx):
-        """Returns the Name and Dex Number for a given label index"""
+        """Returns data for a given label index"""
         # Handle tensor inputs just in case
         if isinstance(label_idx, torch.Tensor):
             label_idx = label_idx.item()
@@ -172,15 +166,10 @@ def get_structured_splits(dataset, split_mode='generation', train_vals=None, val
     else:    
         for label_idx in all_labels:
             # 1. Fetch the specific metadata for this label
-            # (We use the lookups you created in __init__)
             if split_mode == 'generation':
                 val = dataset.idx_to_gen[label_idx]
             elif split_mode == 'type':
-                val = dataset.idx_to_type1[label_idx] # Primary type
-            elif split_mode == 'stage':
-                # 1: Basic, 2: Stage 1, 3: Stage 2
-                # You might need to clean your CSV logic if it uses strings like "Basic"
-                val = dataset.pokemon_info.iloc[label_idx]['evolution_stage'] 
+                val = dataset.idx_to_type1[label_idx]
             else:
                 raise ValueError("Unknown split mode")
     
@@ -192,7 +181,7 @@ def get_structured_splits(dataset, split_mode='generation', train_vals=None, val
             elif test_vals and val in test_vals:
                 test_labels.append(label_idx)
       
-        if val_vals is None:
+        if val_vals is None: # If there is no specified validation split, take random 20% of training data
             random.shuffle(train_labels)
 
             num_total_train = len(train_labels)
@@ -204,17 +193,24 @@ def get_structured_splits(dataset, split_mode='generation', train_vals=None, val
     print(f"Train Classes: {len(train_labels)} | Test Classes: {len(test_labels)} | Validation Classes: {len(val_labels)}")
     return train_labels, test_labels, val_labels
 
-def get_meta_dataloaders_pokedex(ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
+def get_meta_dataloaders_pokedex(ds, augmented_ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
     
     # --- Train Loader ---
-    # We manually inject the filtered labels into the sampler
-    train_sampler = Pokedex(
-        dataset=ds,
-        target_labels=train_labels, 
-        n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
-    )
-    
-    train_loader = DataLoader(ds, batch_sampler=train_sampler, num_workers=2)
+    if augmented_ds is not None:
+        train_sampler = Pokedex(
+            dataset=augmented_ds,
+            target_labels=train_labels, 
+            n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
+        )
+        train_loader = DataLoader(augmented_ds, batch_sampler=train_sampler, num_workers=2)
+
+    else: # Allow for a non-augmented loader
+        train_sampler = Pokedex(
+            dataset=ds,
+            target_labels=train_labels, 
+            n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
+        )
+        train_loader = DataLoader(ds, batch_sampler=train_sampler, num_workers=2)
 
     # --- Test Loader ---
     test_sampler = Pokedex(
@@ -236,17 +232,24 @@ def get_meta_dataloaders_pokedex(ds, train_labels, test_labels, val_labels, n_wa
     
     return train_loader, test_loader, val_loader
 
-def get_meta_dataloaders_oak(ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
+def get_meta_dataloaders_oak(ds, augmented_ds, train_labels, test_labels, val_labels, n_way, n_shot, n_query, episodes):
     
     # --- Train Loader ---
-    # We manually inject the filtered labels into the sampler
-    train_sampler = Oak(
-        dataset=ds,
-        target_labels=train_labels, 
-        n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
-    )
+    if augmented_ds is not None:
+        train_sampler = Oak(
+            dataset=augmented_ds,
+            target_labels=train_labels, 
+            n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
+        )
+        train_loader = DataLoader(augmented_ds, batch_sampler=train_sampler, num_workers=2)
     
-    train_loader = DataLoader(ds, batch_sampler=train_sampler, num_workers=2)
+    else:# Allow for a non-augmented loader
+        train_sampler = Oak(
+            dataset=ds,
+            target_labels=train_labels, 
+            n_way=n_way, n_shot=n_shot, n_query=n_query, n_episodes=episodes
+        )
+        train_loader = DataLoader(ds, batch_sampler=train_sampler, num_workers=2)
 
     # --- Test Loader ---
     test_sampler = Oak(

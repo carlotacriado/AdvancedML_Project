@@ -2,32 +2,16 @@ import torch
 import torchvision
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import cv2
 import random
 import os
 from Utils.globals import *
 
+  
+# --- VISUALISATION FUNCTIONS ---
 
-### class prediction accuracy:
-def top1_acc(pred: torch.FloatTensor, 
-             y: torch.LongTensor):
-    """calculates accuracy over a batch as a float
-    given predicted logits 'pred' and integer targets 'y'"""
-    return (pred.argmax(axis=1) == y).float().mean().item()  
-
-def top5_acc(pred: torch.FloatTensor, 
-             y: torch.LongTensor):
-    """calculates top5 accuracy (whether any of the top 5 logits
-    correspond to the true label), given predicted logits 'pred' 
-    and integer targets 'y'"""
-    top5_idxs = torch.sort(pred, dim=1, descending=True).indices[:,:5]
-    correct = (top5_idxs == y.unsqueeze(1)).any(dim=1)
-    avg_acc = correct.float().mean().item()
-    return avg_acc    
-
-# VISUALISATION
-
-def visualize_episode(images, n_way, n_shot, n_query):
+def visualize_episode(images, n_way, n_shot, n_query, file_name):
     """
     Visualizes a meta-learning episode as a grid.
     
@@ -79,7 +63,7 @@ def visualize_episode(images, n_way, n_shot, n_query):
 
         # 4. Create the Support/Query Separator (A Red Vertical Line)
         separator = np.zeros((h + 2, 5, 3), dtype=np.uint8) 
-        separator[:] = (0, 0, 255) # BGR Red
+        separator[:] = (0, 0, 0) # BGR Red
 
         # 5. Concatenate the row: [Support Images] + [Red Line] + [Query Images]
         support_part = cv2.hconcat(row_imgs[:n_shot])
@@ -91,10 +75,8 @@ def visualize_episode(images, n_way, n_shot, n_query):
     # 6. Stack all rows vertically
     final_grid = cv2.vconcat(rows_list)
 
-    # 7. Display
-    cv2.imshow(f"Episode: {n_way}-Way (Rows), {n_shot}-Shot (Left) | Query (Right)", final_grid)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # 7. Save
+    cv2.imwrite(file_name, final_grid)  
 
 def visualize_sample(dataset, idx):
     """
@@ -102,7 +84,6 @@ def visualize_sample(dataset, idx):
     and displays it with metadata in the title.
     """
     # 1. Get the Tensor and Label Index
-    # dataset[idx] triggers __getitem__, so transparency fix and transforms happen here
     img_tensor, label_idx = dataset[idx] 
     
     # 2. Retrieve Metadata using our new lookups
@@ -133,40 +114,6 @@ def visualize_sample(dataset, idx):
     cv2.waitKey(0) # Wait for any key press
     cv2.destroyAllWindows() 
 
-# ===================================================
-# Functions to add a seed (to ensure reproducibility)
-# ===================================================
-def set_all_seeds(seed=SEED):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    
-    # numpy
-    np.random.seed(seed)
-    
-    # PyTorch 
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed) # Para multi-GPU
-    
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    
-    print(f"[Info] Semilla global fijada en: {seed}")
-
-def seed_worker(worker_id):
-    """
-    Función para inicializar la seed de los workers de los Dataloaders.
-    Esto asegura que la carga de datos en paralelo sea determinista.
-    """
-    worker_seed = torch.initial_seed() % 2**32
-    np.random.seed(worker_seed)
-    random.seed(worker_seed)
-    
-# =============================
-# Function to save Loss curves
-# =============================
-import matplotlib.pyplot as plt
-
 def save_plots(train_acc, val_acc, train_loss, val_loss, filename="training_curves.png"):
     epochs = range(1, len(train_acc) + 1)
 
@@ -194,13 +141,6 @@ def save_plots(train_acc, val_acc, train_loss, val_loss, filename="training_curv
     plt.savefig(filename)
     plt.close() # Cierra la figura para liberar memoria
     print(f"[Info] Gráfico guardado en: {filename}")
-    
-def apply_support_aug(x_support):
-    """
-    Applies augmentation to the support set tensor.
-    x_support shape: [N_support_total, 3, 84, 84]
-    """
-    return SUPPORT_AUGMENTATIONS(x_support)
 
 def denormalize(tensor):
     """
@@ -215,24 +155,118 @@ def denormalize(tensor):
 def save_support_visualization(x_support, y_support, file_name="debug_support_aug.png"):
     """
     Saves a grid of augmented support images with their labels.
-    x_support: [Batch, 3, H, W] tensor (augmented)
-    y_support: [Batch] tensor (labels)
     """
-    # 1. Denormalize to get back to [0, 1] range for valid image saving
-    images = denormalize(x_support.clone())
+    # 1. REMOVE DENORMALIZE
+    # Since you only used ToTensor(), your images are already [0, 1]
+    # denormalize() was corrupting them by applying ImageNet math to raw pixels.
+    images = x_support.clone()
     
-    # 2. Clip values just in case augmentation pushed them slightly outside [0,1]
+    # 2. Clip values (Good safety measure for ColorJitter)
     images = torch.clamp(images, 0, 1)
     
     # 3. Create a Grid
-    # nrow=5 means 5 images per row. Adjust based on your N_SHOT.
     grid_img = torchvision.utils.make_grid(images, nrow=5, padding=2)
     
     # 4. Save to disk
-    # We use torchvision.utils.save_image which expects [C, H, W]
     os.makedirs("Results/Debug", exist_ok=True)
     save_path = os.path.join("Results/Debug", file_name)
     torchvision.utils.save_image(grid_img, save_path)
     
     print(f"Saved visualization debug grid to: {save_path}")
-    print(f"Labels in this grid: {y_support.tolist()}")
+
+
+def visualize_batch(images, true_labels, pred_labels, dataset, save_path):
+    """
+    Visualize a batch of images with predicted vs real labels.
+    Green --> Right, Red --> Wrong
+    """
+    # Undo tensor transform
+    images_np = images.cpu().detach().numpy().transpose((0, 2, 3, 1))
+    images_np = np.clip(images_np, 0, 1)
+    
+    # Configure grid
+    batch_size = len(images)
+    cols = 5
+    rows = (batch_size + cols - 1) // cols
+    
+    fig = plt.figure(figsize=(15, 3.5 * rows))
+    
+    idx_to_name = dataset.idx_to_name
+    
+    for i in range(batch_size):
+        ax = plt.subplot(rows, cols, i + 1)
+        ax.imshow(images_np[i])
+        ax.axis('off')
+        
+        # Get names and IDs
+        t_id = int(true_labels[i])
+        p_id = int(pred_labels[i])
+        
+        true_name = idx_to_name.get(t_id, f"ID_{t_id}")
+        pred_name = idx_to_name.get(p_id, f"ID_{p_id}")
+        
+        # Text and Colour
+        is_correct = (t_id == p_id)
+        color = 'green' if is_correct else 'red'
+        title = f"T: {true_name}\nP: {pred_name}"
+        
+        ax.set_title(title, color=color, fontsize=10, fontweight='bold')
+        
+    # Save
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+    print(f"--> Visualizacion guardada en: {save_path}")
+
+# --- SET SEED FUNCTIONS --- (to ensure reproducibility)
+
+def set_all_seeds(seed=SEED):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    # numpy
+    np.random.seed(seed)
+    
+    # PyTorch 
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    print(f"[Info] Semilla global fijada en: {seed}")
+
+def seed_worker(worker_id):
+    """
+    Función para inicializar la seed de los workers de los Dataloaders.
+    Esto asegura que la carga de datos en paralelo sea determinista.
+    """
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    
+
+# --- DATA AUGMENTATION FUNCTIONS ---
+    
+def apply_support_aug(x_support):
+    """
+    Applies augmentation to each image in the support set individually.
+    x_support shape: [N_support_total, 3, 84, 84]
+    """
+    # Create a list to hold the augmented single images
+    augmented_imgs = []
+    
+    # Iterate through the batch dimension (dim 0)
+    for i in range(x_support.size(0)):
+        # Extract single image: shape [3, 84, 84]
+        single_img = x_support[i]
+        
+        # Apply transform (Generates NEW random params for this specific image)
+        aug_img = SUPPORT_AUGMENTATIONS(single_img)
+        
+        augmented_imgs.append(aug_img)
+    
+    # Stack them back into a batch: [N_support_total, 3, 84, 84]
+    return torch.stack(augmented_imgs)
