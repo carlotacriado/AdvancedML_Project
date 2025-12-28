@@ -36,7 +36,7 @@ To help you navigate the code, here is a detailed breakdown of the folder struct
 
 ### 📂 Tests
 * **`test_hyper.py`**: Expliación
-* 📂 **Tests_Baseline**: Expliación
+* 📂 **Tests_Baseline**: Scripts for both Tasks (Pokedex and Oak) for baseline model 
   * **`test_evolution_task.py`**: Performs episodic evaluation on the 'Oak' evolution task using test-time fine-tuning.
   * **`test_with_finetuning.py`**: Executes the meta-testing pipeline for standard classification, utilizing the Pokedex sampler to generate random episodes and measuring the efficacy of the test-time adaptation loop on unseen species.
 
