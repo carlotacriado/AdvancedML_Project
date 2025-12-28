@@ -34,21 +34,17 @@ To help you navigate the code, here is a detailed breakdown of the folder struct
 * **`globals.py`**: Expliación
 * **`utils.py`**: Expliación
 
-### 📂 Models
+### 📂 Tests
 * **`test_hyper.py`**: Expliación
-* 📂 Tests_Baseline: Expliación
+* 📂 **Tests_Baseline**: Expliación
   * **`test_evolution_task.py`**: Expliación
   * **`test_with_finetuning.py`**: Expliación
 
+### 📂 Trains
+* **`train_baseline.py`**: Expliación
+* **`train_baseline_evolution.py`**: Expliación
+* **`train_hyper.py`**: Expliación
+* **`train_rept.py`**: Expliación
 
+### 📄 Gotta_learn__em_all.pdf
 
-├── Dataloaders/           # Custom PyTorch dataloaders and samplers
-├── Dataset_Analysis/      # EDA, evolutionary 'Family ID' generation, and data visualization
-├── logs/                  # Local training logs
-├── Main/                  # Core execution scripts 
-├── Models/                # Architecture definitions (Baseline, Reptile, Hypernet)
-├── tests/                 # Test loops
-├── trains/                # Training loops/functions and episodic trainers
-├── Utils/                 # Helper functions and configuration parsers
-├── wandb/                 # Weights & Biases tracking data
-└── Results/               # Figures and plots for the report
