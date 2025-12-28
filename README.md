@@ -1,6 +1,7 @@
 # Advanced Machine Learning Project
 
 This project explores the capabilities of Few-Shot Learning algorithms to generalize across complex semantic and stylistic distributions. Using a Pokémon sprite dataset, we evaluate whether meta-learning algorithms can maintain performance when the "tasks" share high semantic similarity (e.g., distinguishing between Pokémon of the same Type) or distinct stylistic features (Generations), as well as seeing whether this models are able to tell which Pókemon are part of the same evolutionary line.
+
 <img width="175" height="175" alt="image" src="https://github.com/user-attachments/assets/6803affb-10d7-4635-8e0f-af1672f9a954" />
 
 
