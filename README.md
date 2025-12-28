@@ -1,6 +1,6 @@
 # Advanced Machine Learning Project
 
-This repository hosts the development of a project investigating the application of Meta-learning algorithms within the Pokémon domain.  
+This project explores the capabilities of Few-Shot Learning algorithms to generalize across complex semantic and stylistic distributions. Using a Pokémon sprite dataset, we evaluate whether meta-learning algorithms can maintain performance when the "tasks" share high semantic similarity (e.g., distinguishing between Pokémon of the same Type) or distinct stylistic features (Generations), as well as seeing whether this models are able to tell which Pókemon are part of the same evolutionary line.
 
 ## Repository Guide
 To help you navigate the code, here is a detailed breakdown of the folder structure and the purpose of each component.
