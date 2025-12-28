@@ -2,7 +2,9 @@
 
 This project explores the capabilities of Few-Shot Learning algorithms to generalize across complex semantic and stylistic distributions. Using a Pokémon sprite dataset, we evaluate whether meta-learning algorithms can maintain performance when the "tasks" share high semantic similarity (e.g., distinguishing between Pokémon of the same Type) or distinct stylistic features (Generations), as well as seeing whether this models are able to tell which Pókemon are part of the same evolutionary line.
 
-<img width="175" height="175" alt="image" src="https://github.com/user-attachments/assets/6803affb-10d7-4635-8e0f-af1672f9a954" />
+<img width="175" height="175" alt="image" src="https://github.com/user-attachments/assets/6803affb-10d7-4635-8e0f-af1672f9a954" /> <img width="175" height="175" alt="image" src="https://github.com/user-attachments/assets/511e3ae4-3933-4e6f-bc27-256de3d176b7" />
+ <img width="175" height="175" alt="image" src="https://github.com/user-attachments/assets/a6a7ddcc-0c4a-4452-ad16-a94e7a5b4dd5" />
+
 
 
 ## Repository Guide
