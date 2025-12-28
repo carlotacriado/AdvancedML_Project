@@ -1,7 +1,0 @@
-/var/spool/slurmd/job95880/slurm_script: línea 12: module: orden no encontrada
-/var/spool/slurmd/job95880/slurm_script: línea 13: module: orden no encontrada
-Traceback (most recent call last):
-  File "Main/Main_baseline.py", line 11, in <module>
-    from Dataloaders.dataloader_baseline import get_baseline_dataloaders
-  File "/export/fhome/amlai08/AdvancedML_Project/Dataloaders/dataloader_baseline.py", line 8, in <module>
-ImportError: cannot import name 'get_baseline_dataloaders' from 'Utils.globals' (/export/fhome/amlai08/AdvancedML_Project/Utils/globals.py)
