@@ -10,27 +10,29 @@ from torchvision import transforms
 from sklearn.metrics import confusion_matrix
 from tqdm import tqdm
 
-# --- IMPORTS DE TUS ARCHIVOS ---
+# --- LOCAL MODULES ---
 from Utils.utils import set_all_seeds, apply_support_aug
 from Utils.globals import *
 from Dataloaders.dataloader import PokemonMetaDataset, get_structured_splits, get_meta_dataloaders_pokedex, get_meta_dataloaders_oak
 from Models.Baseline import ConvBackbone 
 from Models.Hypernetwork import HyperNetworkModel 
 
-# ================= CONFIGURACIÓN =================
+# ==========================================
+# 1. CONFIGURATION
+# ==========================================
 TASK = 'oak'
 SPLIT_MODE = 'random' 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Grid Search (Mismos valores que entrenaste)
+# Grid Search 
 N_WAY_LIST = [2, 3, 4, 5]
 N_SHOT_LIST = [1, 2, 3, 4, 5]
 
 # Configuración Test
 N_QUERY = 1     
-TEST_EPISODES = 100  # Cuantos más, más fiable (100-500 es estándar)
+TEST_EPISODES = 100  
 
-# Rutas
+# Paths
 BASE_PATH = "/fhome/amlai08/AdvancedML_Project"
 CSV_PATH = os.path.join(BASE_PATH, "Data/pokemon_data_linked.csv")
 IMGS_PATH = os.path.join(BASE_PATH, "Data/pokemon_sprites")
@@ -40,7 +42,7 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # =================================================
 
-# --- 1. VISUALIZACIÓN & PLOTS ---
+# --- 1. VISUALIZATIONS & PLOTS ---
 
 def denormalize(tensor):
     img = tensor.cpu().numpy().transpose((1, 2, 0))
@@ -48,7 +50,7 @@ def denormalize(tensor):
     return img
 
 def save_grid_view(query_imgs, query_labels, preds_rel, dataset, save_path):
-    """Guarda foto (Verde/Rojo) del primer batch"""
+    """Saves a grid view (Green/Red) of the first batch"""
     idx_to_name = dataset.idx_to_name
     unique_classes_episode = torch.unique(query_labels) 
 
@@ -68,7 +70,7 @@ def save_grid_view(query_imgs, query_labels, preds_rel, dataset, save_path):
         
         pred_r = preds_rel[i].item()
         
-        # Mapeo seguro
+        # Mapping safely
         if pred_r < len(unique_classes_episode):
             pred_global = unique_classes_episode[pred_r].item()
             pred_name = idx_to_name.get(pred_global, "Err")
@@ -87,20 +89,20 @@ def save_grid_view(query_imgs, query_labels, preds_rel, dataset, save_path):
     plt.close()
 
 def save_filtered_confusion_matrix(all_true, all_preds, dataset, save_path):
-    """Heatmap con los Top 20 errores más frecuentes"""
+    """Heatmap with the Top 20 errors most frequent"""
     labels = list(set(all_true) | set(all_preds))
     cm = confusion_matrix(all_true, all_preds, labels=labels)
     
-    # Anular diagonal (aciertos) para ver solo fallos
+    # Anulate diagonal to only see mistakes
     np.fill_diagonal(cm, 0)
     errors_per_class = cm.sum(axis=1)
     
-    # Top 20 clases con más errores
+    # Top 20 classes with more mistakes
     n_top = min(len(labels), 20)
     top_indices = np.argsort(errors_per_class)[-n_top:] 
     top_labels = [labels[i] for i in top_indices]
     
-    # Mapear nombres
+    # Map names
     top_names = [dataset.idx_to_name.get(l, f"ID_{l}")[:10] for l in top_labels] # Cortar nombres largos
     
     cm_small = confusion_matrix(all_true, all_preds, labels=top_labels)
@@ -116,7 +118,7 @@ def save_filtered_confusion_matrix(all_true, all_preds, dataset, save_path):
     plt.close()
 
 def save_accuracy_histogram(accuracies, save_path, mean_acc):
-    """Muestra si el modelo es estable o inestable"""
+    """Shows if the model is stable or unstable"""
     plt.figure(figsize=(8, 6))
     plt.hist(accuracies, bins=10, range=(0, 1), color='skyblue', edgecolor='black', alpha=0.7)
     plt.axvline(mean_acc, color='red', linestyle='dashed', linewidth=2, label=f'Mean: {mean_acc:.2f}')
@@ -165,21 +167,20 @@ def main():
             path = os.path.join(MODELS_DIR, filename)
             
             if not os.path.exists(path):
-                continue # Saltar si no existe el modelo
+                continue 
             
             print(f"\n⚡ Evaluando: {filename}...")
             
-            # Carpeta para este modelo
+            # Folder for this model
             current_config_dir = os.path.join(RESULTS_DIR, f"{N_WAY}way_{N_SHOT}shot")
             os.makedirs(current_config_dir, exist_ok=True)
 
-            # Dataloader & Modelo
+            # Dataloader & Model
             loader_func = get_meta_dataloaders_pokedex if TASK == 'pokedex' else get_meta_dataloaders_oak
             _, test_loader, _ = loader_func(dataset, dataset, train_labels, test_labels, val_labels, 
                                             n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY, episodes=TEST_EPISODES)
             
             backbone = ConvBackbone()
-            # Asumiendo 3200 features como en tu main. Si cambiaste eso, ajústalo aquí.
             hyper_model = HyperNetworkModel(backbone, feature_dim=3200, num_classes=N_WAY).to(DEVICE)
             
             try:
@@ -195,7 +196,7 @@ def main():
             all_true = []
             all_pred = []
             
-            # Tracking de dificultad por clase {GlobalID: [Aciertos, Total]}
+            # Tracking the difficulty by class {GlobalID: [Correct, Total]}
             class_performance = {} 
 
             with torch.no_grad():
@@ -213,7 +214,7 @@ def main():
                     support_globals = global_labels.view(N_WAY, p)[:, 0] 
                     query_globals_true = global_labels.view(N_WAY, p)[:, N_SHOT:].contiguous().view(-1)
                     
-                    # Inferencia
+                    # Inference
                     logits = hyper_model(x_support, x_query, N_WAY, N_SHOT, N_QUERY)
                     preds_rel = torch.argmax(logits, dim=1)
                     
@@ -222,7 +223,7 @@ def main():
                     acc = (preds_rel == targets_rel).float().mean().item()
                     accuracies.append(acc)
                     
-                    # Globales para Matriz
+                    # Globals for Matriz
                     preds_global = support_globals[preds_rel].cpu().numpy()
                     true_global = query_globals_true.cpu().numpy()
                     
@@ -243,20 +244,20 @@ def main():
                         save_grid_view(x_query, query_globals_true, preds_rel, dataset, 
                                        os.path.join(current_config_dir, "viz_grid.png"))
 
-            # --- CÁLCULO DE MÉTRICAS ---
+            # --- METRICS CALCULATION ---
             mean_acc = np.mean(accuracies)
             std_acc = np.std(accuracies)
             min_acc = np.min(accuracies)
             max_acc = np.max(accuracies)
             ci95 = 1.96 * (std_acc / np.sqrt(len(accuracies)))
             
-            # --- GENERAR REPORTES ---
+            # --- GENERATE REPORTS ---
             
-            # 1. Matriz Confusión
+            # 1. Confusion Matrix
             save_filtered_confusion_matrix(all_true, all_pred, dataset, 
                                            os.path.join(current_config_dir, "confusion_matrix.png"))
             
-            # 2. Histograma
+            # 2. Histogram
             save_accuracy_histogram(accuracies, 
                                     os.path.join(current_config_dir, "accuracy_histogram.png"), mean_acc)
             
@@ -268,7 +269,7 @@ def main():
                 hardest_list.append({"Pokemon": p_name, "Global_ID": pid, "Acc": acc_cls, "Samples": stats[1]})
             
             df_hard = pd.DataFrame(hardest_list)
-            df_hard.sort_values(by="Acc", ascending=True, inplace=True) # Los peores primero
+            df_hard.sort_values(by="Acc", ascending=True, inplace=True) # The worst first
             df_hard.head(50).to_csv(os.path.join(current_config_dir, "hardest_classes.csv"), index=False)
 
             print(f"   -> Acc: {mean_acc*100:.2f}% (±{ci95*100:.2f}) | Worst: {min_acc*100:.2f}%")
@@ -283,14 +284,14 @@ def main():
                 "Best_Episode": max_acc,
                 "Std_Dev": std_acc
             })
-            
-            # Limpiar RAM/VRAM
+
+            # Clear RAM/VRAM
             del hyper_model
             del backbone
             torch.cuda.empty_cache()
             gc.collect()
 
-    # --- CSV FINAL COMPARATIVO ---
+    # --- FINAL COMPARATIVE CSV ---
     df_final = pd.DataFrame(summary_results)
     df_final.sort_values(by="Mean_Acc", ascending=False, inplace=True)
     
