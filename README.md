@@ -32,7 +32,7 @@ To help you navigate the code, here is a detailed breakdown of the folder struct
 
 ### 📂 Models
 * **`Baseline.py`**: Defines the shared Conv-4 Backbone utilized by all three architectures (Baseline, Reptile, HyperNetwork) for feature extraction, alongside the specific linear ClassifierHead used during the Baseline's supervised pre-training.
-* **`Hypernetwork.py`**: Expliación
+* **`Hypernetwork.py`**:  Defines the HyperNetworkModel architecture, integrating the shared backbone with the generative Multi-Layer Perceptron (MLP) responsible for dynamically predicting the task-specific classification weights $\mathbf{W}$ from the support set prototypes.
 * **`Reptile.py`**: Here you can find the necessary functions to define the reptile algorithm, as well as to train and test it. In this case it is used with our Backbone, but can be applied to any other.
 
 ### 📂 Utils
