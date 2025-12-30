@@ -40,7 +40,7 @@ To help you navigate the code, here is a detailed breakdown of the folder struct
 * **`utils.py`**:  In this file you can find multiple utility functions to visualise and plot results, set a seed to make experiments reproducible and augment data
 
 ### 📂 Tests
-* **`test_hyper.py`**: Expliación
+* **`test_hyper.py`**:  Executes the complete evaluation sweep for the HyperNetwork across all $N$-Way $K$-Shot combinations. It calculates mean accuracies with confidence intervals, generates performance plots, and supports configuration for both identification and evolution tasks.
 * 📂 **Tests_Baseline**: Scripts for both Tasks (Pokedex and Oak) for baseline model 
   * **`test_evolution_task.py`**: Performs episodic evaluation on the 'Oak' evolution task using test-time fine-tuning.
   * **`test_with_finetuning.py`**: Executes the meta-testing pipeline for standard classification, utilizing the Pokedex sampler to generate random episodes and measuring the efficacy of the test-time adaptation loop on unseen species.
@@ -48,7 +48,7 @@ To help you navigate the code, here is a detailed breakdown of the folder struct
 ### 📂 Trains
 * **`train_baseline.py`**: Orchestrates the end-to-end training loop for the feature extractor, integrating aggressive data augmentation, structured dataset splitting (Random/Generation/Type), and Weights & Biases experiment tracking.
 * **`train_baseline_evolution.py`**: Runs the supervised training loop for the Evolutionary Task, re-mapping target labels from Species IDs to Family IDs to enforce morphological generalization during the backbone optimization phase.
-* **`train_hyper.py`**: Expliación
+* **`train_hyper.py`**: Encapsulates the modular functions for training and validating individual episodes regarding Hypernetwork.
 * **`train_rept.py`**: In this code you will find the code to train the reptile algorithm. It runs the algorithm with the selected data split (random, generation or type) and using (or not) data augmentation.
 
 ### 📄 Gotta_learn__em_all.pdf
