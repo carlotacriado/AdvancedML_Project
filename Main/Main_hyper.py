@@ -127,7 +127,7 @@ def main():
                     val_loss_accum += loss
                     val_acc_accum += acc
                     
-                avg_val_loss = val_loss_accum / len(val_loader) # OJO: len(val_loader) = num_episodes
+                avg_val_loss = val_loss_accum / len(val_loader) 
                 avg_val_acc = val_acc_accum / len(val_loader)
 
                 # --- LOGGING ---
