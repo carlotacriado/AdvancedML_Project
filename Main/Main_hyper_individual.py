@@ -6,15 +6,17 @@ import time
 import wandb
 import numpy as np
 
-# --- IMPORTS DE TUS ARCHIVOS ---
+# --- LOCAL MODULES ---
 from Utils.utils import set_all_seeds
 from Utils.globals import *
 from Dataloaders.dataloader import PokemonMetaDataset, get_structured_splits, get_meta_dataloaders_pokedex, get_meta_dataloaders_oak
-from Models.Baseline import ConvBackbone # Reusamos el backbone
-from Models.Hypernetwork import HyperNetworkModel # Tu nuevo modelo
-from trains.train_hyper import train_episode, validate_episode # Las funciones de arriba
+from Models.Baseline import ConvBackbone 
+from Models.Hypernetwork import HyperNetworkModel 
+from trains.train_hyper import train_episode, validate_episode 
 
-# --- CONFIG ---
+# ==========================================
+# 1. CONFIGURATION & HYPERPARAMETERS
+# ==========================================
 TASK = 'pokedex'  # 'pokedex' o 'oak'
 SPLIT_MODE = 'random' # 'random' o 'generation'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -25,11 +27,8 @@ N_QUERY = 1   # Query Size (Q)
 
 # Hypernetwork Config
 EMBEDDING_SIZE = 128 * 5 * 5 # 3200 features salen del Conv4 antes del flatten
-# IMPORTANTE: Si tu ConvBackbone ya tiene un flatten final a 128, cambia esto a 128.
-# Mirando Baseline.py: "x = x.view(x.size(0), -1)". El output es 5x5x128 = 3200.
-# A MENOS QUE cambies el backbone para tener un FC final.
-# Vamos a asumir que usas el ConvBackbone tal cual: output es 3200.
 
+# WandB Configuration
 WANDB_PROJECT = "Hypernetwork"
 WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b"
 
@@ -46,7 +45,7 @@ def main():
             "n_way": N_WAY,
             "k_shot": N_SHOT,
             "q_query": N_QUERY,
-            "lr": 1e-4, # Hypernets suelen necesitar LRs más bajos
+            "lr": 1e-4, # Hypernets usually need lower LRs
             "epochs": MAX_EPOCHS
         }
     )
@@ -81,7 +80,6 @@ def main():
     # 3. MODEL SETUP
     # Backbone
     backbone = ConvBackbone() 
-    # Como el output del backbone es 5x5x128 = 3200, se lo pasamos a la hypernetwork
     hyper_model = HyperNetworkModel(backbone, feature_dim=3200, num_classes=N_WAY).to(DEVICE)
 
     optimizer = optim.Adam(hyper_model.parameters(), lr=1e-4)
@@ -114,7 +112,7 @@ def main():
             val_loss_accum += loss
             val_acc_accum += acc
             
-        avg_val_loss = val_loss_accum / len(val_loader) # OJO: len(val_loader) = num_episodes
+        avg_val_loss = val_loss_accum / len(val_loader) 
         avg_val_acc = val_acc_accum / len(val_loader)
 
         # --- LOGGING ---

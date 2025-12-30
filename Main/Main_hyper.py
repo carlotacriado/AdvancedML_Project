@@ -8,15 +8,17 @@ import numpy as np
 import os
 import gc
 
-# --- IMPORTS DE TUS ARCHIVOS ---
+# --- LOCAL MODULES ---
 from Utils.utils import set_all_seeds
 from Utils.globals import *
 from Dataloaders.dataloader import PokemonMetaDataset, get_structured_splits, get_meta_dataloaders_pokedex, get_meta_dataloaders_oak
-from Models.Baseline import ConvBackbone # Reusamos el backbone
-from Models.Hypernetwork import HyperNetworkModel # Tu nuevo modelo
-from trains.train_hyper import train_episode, validate_episode # Las funciones de arriba
+from Models.Baseline import ConvBackbone 
+from Models.Hypernetwork import HyperNetworkModel 
+from trains.train_hyper import train_episode, validate_episode 
 
-# --- CONFIG ---
+# ==========================================
+# 1. CONFIGURATION & HYPERPARAMETERS
+# ==========================================
 TASK = 'oak'  # 'pokedex' o 'oak'
 SPLIT_MODE = 'random' # 'random' o 'generation'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -27,18 +29,15 @@ N_QUERY = 1   # Query Size (Q)
 
 # Hypernetwork Config
 EMBEDDING_SIZE = 128 * 5 * 5 # 3200 features salen del Conv4 antes del flatten
-# IMPORTANTE: Si tu ConvBackbone ya tiene un flatten final a 128, cambia esto a 128.
-# Mirando Baseline.py: "x = x.view(x.size(0), -1)". El output es 5x5x128 = 3200.
-# A MENOS QUE cambies el backbone para tener un FC final.
-# Vamos a asumir que usas el ConvBackbone tal cual: output es 3200.
 
+# WandB Configuration
 WANDB_PROJECT = "Hypernetwork_oak"
 WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b"
 
 def main():
     wandb.login(key=WANDB_KEY)
 
-    # Crear carpeta para guardar modelos si no existe
+    # Data Paths
     save_dir = "Results/Models_pth/Hypernetwork_pth/oak"
     os.makedirs(save_dir, exist_ok=True)
     
@@ -52,7 +51,6 @@ def main():
             # 1. SETUP
             set_all_seeds(SEED)
             
-            # Nombre único para este experimento
             run_name = f"HN_{TASK}_{SPLIT_MODE}_{N_WAY}way_{N_SHOT}shot"
     
             wandb.init(
@@ -65,7 +63,7 @@ def main():
                     "n_way": N_WAY,
                     "k_shot": N_SHOT,
                     "q_query": N_QUERY,
-                    "lr": 1e-4, # Hypernets suelen necesitar LRs más bajos
+                    "lr": 1e-4, # Hypernets usually need lower LRs
                     "epochs": MAX_EPOCHS
                 }
             )
@@ -88,7 +86,7 @@ def main():
             # Loaders (Episodic)
             loader_func = get_meta_dataloaders_pokedex if TASK == 'pokedex' else get_meta_dataloaders_oak
             
-            # Pasamos las variables del bucle actual
+            # We pass the variables of the current loop
             train_loader, test_loader, val_loader = loader_func(
                 dataset, None, train_labels, test_labels, val_labels,
                 n_way=N_WAY, n_shot=N_SHOT, n_query=N_QUERY, episodes=EPISODES_PER_EPOCH
@@ -97,7 +95,6 @@ def main():
             # 3. MODEL SETUP
             # Backbone
             backbone = ConvBackbone() 
-            # Como el output del backbone es 5x5x128 = 3200, se lo pasamos a la hypernetwork
             hyper_model = HyperNetworkModel(backbone, feature_dim=EMBEDDING_SIZE, num_classes=N_WAY).to(DEVICE)
 
             optimizer = optim.Adam(hyper_model.parameters(), lr=1e-4)
@@ -159,7 +156,7 @@ def main():
             print(f">>> FINISHED. Best Acc: {best_val_acc:.2f}%. Model saved: {filename}")
             wandb.finish()
             
-            # Limpieza de memoria GPU antes del siguiente bucle
+            # Clean up GPU memory before the next loop
             del hyper_model
             del optimizer
             del backbone
