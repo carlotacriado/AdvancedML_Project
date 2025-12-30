@@ -54,3 +54,4 @@ To help you navigate the code, here is a detailed breakdown of the folder struct
 ### 📄 Gotta_learn__em_all.pdf
 * Report of the project
 
+### 📦 Requirements.txt
