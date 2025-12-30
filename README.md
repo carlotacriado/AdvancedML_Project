@@ -27,8 +27,8 @@ To help you navigate the code, here is a detailed breakdown of the folder struct
   
 ### 📂 Main
 * **`Main_baseline.py`**: This script runs the global pre-training routine for the Baseline model with configurable splits to produce the initial feature extractor weights.
-* **`Main_hyper.py`**: Expliación
-* **`Main_hyper_individual.py`**: Expliación
+* **`Main_hyper.py`**: Executes the complete HyperNetwork training sweep, automatically iterating through all defined $N$-Way and $K$-Shot combinations in a single run to generate models for every regime.
+* **`Main_hyper_individual.py`**: Performs a single training run for the HyperNetwork with a fixed, user-defined configuration.
 
 ### 📂 Models
 * **`Baseline.py`**: Defines the shared Conv-4 Backbone utilized by all three architectures (Baseline, Reptile, HyperNetwork) for feature extraction, alongside the specific linear ClassifierHead used during the Baseline's supervised pre-training.
