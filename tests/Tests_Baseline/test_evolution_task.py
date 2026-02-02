@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import os
 import time  # Import time
+import wandb # Import wandb
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -26,6 +27,10 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 TASK_NAME = "OAK_Task_Horizontal" 
 MODEL_PATH = "Results/Models_pth/Baseline_pth/baseline_evolution_random_seed151.pth"
 RESULTS_DIR = f"Results/Visuals/Baseline_{TASK_NAME}"
+
+# WandB Configuration
+WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b"
+WANDB_PROJECT = "Baseline_Evaluation_Time" # Proyecto específico para evaluación
 
 # Meta-Testing Parameters
 N_WAYS_LIST = [5]      
@@ -192,6 +197,19 @@ def main():
     print(f"--- Evaluating Baseline (Task: {TASK_NAME}) ---")
     set_all_seeds(SEED)
     
+    # --- WANDB INIT ---
+    wandb.login(key=WANDB_KEY)
+    wandb.init(
+        project=WANDB_PROJECT,
+        name=f"Eval_{TASK_NAME}_Baseline",
+        config={
+            "model_path": MODEL_PATH,
+            "ft_steps": FT_STEPS,
+            "ft_lr": FT_LR,
+            "n_episodes": N_EPISODES
+        }
+    )
+    
     transform = transforms.Compose([transforms.Resize((84,84)), transforms.ToTensor()])
     dataset = PokemonMetaDataset(csv_file="Data/pokemon_data_linked.csv", root_dir="Data/pokemon_sprites", transform=transform)
     all_indices = list(dataset.indices_by_label.keys())
@@ -210,8 +228,8 @@ def main():
     print(f"\n{'N-Way':<6} | {'K-Shot':<6} | {'Result (Mean +/- Conf)':<22} | {'Avg Adapt Time':<15}")
     print("-" * 65)
     
-    # Results dictionary to store times
-    all_times = {}
+    # Tabla para guardar resumen de resultados en wandb al final
+    wandb_summary_table = wandb.Table(columns=["N-Way", "K-Shot", "Accuracy", "Confidence", "Avg_Adapt_Time"])
 
     for n_way in N_WAYS_LIST:
         for k_shot in K_SHOTS_LIST:
@@ -246,11 +264,28 @@ def main():
                     accuracies.append(acc)
                     adapt_times.append(t_adapt)
                 
+                # Metrics Calculation
                 mean_acc = np.mean(accuracies)
                 conf = 1.96 * np.std(accuracies) / np.sqrt(N_EPISODES)
                 mean_time = np.mean(adapt_times)
                 
                 print(f"{n_way:<6} | {k_shot:<6} | {mean_acc*100:.2f}% +- {conf*100:.2f}%   | {mean_time:.4f}s")
+                
+                # --- LOGGING TO WANDB ---
+                # Opción A: Loguear como métrica contínua (útil para gráficas de líneas)
+                wandb.log({
+                    "n_way": n_way,
+                    "k_shot": k_shot,
+                    "accuracy": mean_acc,
+                    "confidence_interval": conf,
+                    "avg_adaptation_time": mean_time,
+                    # Nombres específicos para facilitar la comparativa de gráficas
+                    f"acc_{n_way}way_{k_shot}shot": mean_acc,
+                    f"time_{n_way}way_{k_shot}shot": mean_time
+                })
+
+                # Añadir fila a la tabla resumen
+                wandb_summary_table.add_data(n_way, k_shot, mean_acc, conf, mean_time)
                 
             except ValueError:
                 print(f"{n_way:<6} | {k_shot:<6} | SKIPPED")
@@ -258,6 +293,10 @@ def main():
                 import traceback
                 traceback.print_exc()
                 print(f"{n_way:<6} | {k_shot:<6} | ERROR: {e}")
+
+    # Subir la tabla resumen al final del experimento
+    wandb.log({"evaluation_summary": wandb_summary_table})
+    wandb.finish()
 
 if __name__ == '__main__':
     main()
