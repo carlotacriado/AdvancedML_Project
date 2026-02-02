@@ -32,7 +32,7 @@ SAVE_DIR = "Results/Models_pth/Baseline_pth/"
 
 # WandB Configuration
 WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b" 
-WANDB_PROJECT = "Baseline_model"
+WANDB_PROJECT = "Baseline_model_Tiempos"
 
 # Data Paths
 CSV_PATH = "Data/pokemon_data_linked.csv"

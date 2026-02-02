@@ -28,8 +28,8 @@ MODEL_PATH = "Results/Models_pth/Baseline_pth/baseline_evolution_random_seed151.
 RESULTS_DIR = f"Results/Visuals/Baseline_{TASK_NAME}"
 
 # Meta-Testing Parameters
-N_WAYS_LIST = [2, 3, 4, 5]      
-K_SHOTS_LIST = [1, 2, 3, 4, 5]  
+N_WAYS_LIST = [5]      
+K_SHOTS_LIST = [5]  
 N_QUERY = 1                     
 N_EPISODES = 600                
 

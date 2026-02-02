@@ -27,7 +27,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # WandB Configuration
 WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b" 
-WANDB_PROJECT = "Baseline_Evolution_Task"
+WANDB_PROJECT = "Tiempos_Baseline"
 
 # Data Paths
 CSV_PATH = "Data/pokemon_data_linked.csv"
