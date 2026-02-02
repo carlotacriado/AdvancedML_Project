@@ -107,10 +107,6 @@ def main():
 
     print(f"--- Starting Baseline Training (Augmented) | Seed: {SEED} ---")
     
-
-[Image of supervised learning workflow diagram]
-
-    
     # --- 3. Data Preparation ---
     
     # Transform for Validation (Clean)
@@ -120,8 +116,6 @@ def main():
     ])
 
     # Transform for Training (Heavily Augmented)
-    # Crucial for preventing overfitting on small classes
-    
     train_transform = transforms.Compose([
         transforms.Resize((120, 120)),              
         transforms.RandomCrop((84, 84)),            
@@ -139,11 +133,9 @@ def main():
     print(f"Configuring splits for mode: {SPLIT_MODE}")
 
     if SPLIT_MODE == 'random':
-        # Standard random split
         train_labels, test_labels, val_labels = get_structured_splits(val_dataset, split_mode='random')
 
     elif SPLIT_MODE == 'generation':
-        # Train: Gen 1 & 3 | Val: Gen 2 | Test: Gen 4
         train_labels, test_labels, val_labels = get_structured_splits(
             val_dataset, 
             split_mode='generation', 
@@ -153,7 +145,6 @@ def main():
         )
 
     elif SPLIT_MODE == 'type':
-        # Train: Common types | Val: Intermediate | Test: Rare types
         train_types = ['water', 'normal', 'grass', 'bug', 'fire', 'psychic', 'poison']
         val_types   = ['electric', 'ground', 'rock', 'fighting']
         test_types  = ['ghost', 'dragon', 'ice', 'steel', 'dark', 'flying', 'fairy']
@@ -193,11 +184,13 @@ def main():
     wandb.watch(full_model, log="all")
 
     # --- 5. Training Loop ---
-    
-    
     best_val_acc = 0.0
     os.makedirs(SAVE_DIR, exist_ok=True)
     save_path = os.path.join(SAVE_DIR, f"baseline_{TASK}_{SPLIT_MODE}_seed{SEED}.pth")
+
+    # --- [TIMING START] TOTAL TRAINING TIME ---
+    if torch.cuda.is_available(): torch.cuda.synchronize()
+    total_train_start = time.time()
 
     for epoch in range(EPOCHS):
         start_time = time.time()
@@ -213,7 +206,8 @@ def main():
             "train_loss": train_loss,
             "train_acc": train_acc,
             "val_loss": val_loss,
-            "val_acc": val_acc
+            "val_acc": val_acc,
+            "epoch_time": elapsed # Log time per epoch
         })
         
         print(f"Epoch {epoch+1}/{EPOCHS} | Time: {elapsed:.1f}s")
@@ -225,6 +219,38 @@ def main():
             best_val_acc = val_acc
             torch.save(full_model.state_dict(), save_path)
             print(f"  --> New Best Model Saved (Acc: {best_val_acc:.2f}%)")
+
+    # --- [TIMING END] TOTAL TRAINING TIME ---
+    if torch.cuda.is_available(): torch.cuda.synchronize()
+    total_train_end = time.time()
+    total_train_time = total_train_end - total_train_start
+    
+    print(f"\n--- RESUMEN DE TIEMPOS BASELINE (MAIN) ---")
+    print(f"Tiempo Total de Entrenamiento: {total_train_time:.2f} segundos")
+
+    # --- [TIMING] INFERENCE LATENCY CHECK ---
+    # Measure raw inference speed (without backward pass)
+    full_model.eval()
+    sample_img, _ = next(iter(val_loader))
+    sample_img = sample_img[:1].to(DEVICE) # Single image batch
+    
+    # Warmup
+    for _ in range(10): _ = full_model(sample_img)
+    
+    if torch.cuda.is_available(): torch.cuda.synchronize()
+    inf_start = time.time()
+    for _ in range(100):
+        _ = full_model(sample_img)
+    if torch.cuda.is_available(): torch.cuda.synchronize()
+    inf_end = time.time()
+    
+    avg_inf_latency = (inf_end - inf_start) / 100.0
+    print(f"Latencia media de inferencia (1 imagen): {avg_inf_latency:.6f} segundos")
+    
+    wandb.log({
+        "total_train_time": total_train_time,
+        "inference_latency": avg_inf_latency
+    })
 
     print(f"\nTraining Finished. Best Validation Accuracy: {best_val_acc:.2f}%")
     print(f"Model saved to: {save_path}")
