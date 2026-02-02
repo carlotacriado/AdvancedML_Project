@@ -20,18 +20,18 @@ from trains.train_hyper import train_episode, validate_episode
 # 1. CONFIGURATION & HYPERPARAMETERS
 # ==========================================
 TASK = 'oak'  # 'pokedex' o 'oak'
-SPLIT_MODE = 'random' # 'random' o 'generation'
+SPLIT_MODE = 'generation' # 'random' o 'generation'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-N_WAY_LIST = [2, 3, 4, 5]
-N_SHOT_LIST = [1, 2, 3, 4, 5]     # Support Size (K)
+N_WAY_LIST = [5]
+N_SHOT_LIST = [5]     # Support Size (K)
 N_QUERY = 1   # Query Size (Q)
 
 # Hypernetwork Config
 EMBEDDING_SIZE = 128 * 5 * 5 # 3200 features salen del Conv4 antes del flatten
 
 # WandB Configuration
-WANDB_PROJECT = "Hypernetwork_oak"
+WANDB_PROJECT = "Hypernetwork_oak_tiempos"
 WANDB_KEY = "93d025aa0577b011c6d4081b9d4dc7daeb60ee6b"
 
 def main():
