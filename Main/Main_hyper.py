@@ -41,10 +41,6 @@ CSV_PATH = os.path.join(BASE_PATH, "Data/pokemon_data_linked.csv")
 IMGS_PATH = os.path.join(BASE_PATH, "Data/pokemon_sprites")
 SAVE_DIR = os.path.join(BASE_PATH, "Results/Models_pth/Hypernet_pth/")
 
-# Training Params
-MAX_EPOCHS = 100 # O los que uses normalmente
-EPISODES_PER_EPOCH = 100
-VAL_EPISODES = 50
 LR = 1e-4
 
 def main():
@@ -93,7 +89,7 @@ def main():
 
             # Dataloaders
             train_loader = get_meta_dataloaders_oak(dataset, train_lbls, N_WAY, N_SHOT, N_QUERY, EPISODES_PER_EPOCH)
-            val_loader   = get_meta_dataloaders_oak(dataset, val_lbls,   N_WAY, N_SHOT, N_QUERY, VAL_EPISODES)
+            val_loader   = get_meta_dataloaders_oak(dataset, val_lbls,   N_WAY, N_SHOT, N_QUERY)
 
             # Model Init
             backbone = ConvBackbone().to(DEVICE)
