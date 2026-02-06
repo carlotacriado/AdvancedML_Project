@@ -7,6 +7,34 @@ import wandb
 from Utils.globals import *
 from Utils.utils import *
 
+# ==========================================
+# 0. HELPER PARA MEDICIÓN DE TIEMPO
+# ==========================================
+class CudaTimer:
+    """Mide tiempo real en GPU usando eventos de CUDA."""
+    def __init__(self, device):
+        self.device = device
+        self.start_event = torch.cuda.Event(enable_timing=True)
+        self.end_event = torch.cuda.Event(enable_timing=True)
+        self.elapsed = 0.0
+
+    def start(self):
+        if self.device.type == 'cuda':
+            self.start_event.record()
+        else:
+            self.start_time = time.time()
+
+    def stop(self):
+        if self.device.type == 'cuda':
+            self.end_event.record()
+            torch.cuda.synchronize() 
+            self.elapsed = self.start_event.elapsed_time(self.end_event) # devuelve milisegundos
+        else:
+            self.elapsed = (time.time() - self.start_time) * 1000 # a ms
+
+    def get_time_ms(self):
+        return self.elapsed
+
 def train_epoch(meta_model, train_loader, val_loader, n_way, k_shot, q_query, inner_lr, inner_steps, epsilon, device):
     """
     Trains the meta_model for one epoch (e.g., 100 episodes) using manual tensor reshaping.
@@ -71,6 +99,8 @@ def evaluate(meta_model, test_loader, n_way, k_shot, q_query, inner_lr, inner_st
     criterion = nn.CrossEntropyLoss()
     total_acc = 0
     
+    adapt_times_ms = [] # List to store adaptation + inference time per episode
+    
     with torch.no_grad():
         for batch_idx, (images, _) in enumerate(tqdm(test_loader, desc="Evaluating", leave=False)):
             images = images.to(device)
@@ -86,6 +116,11 @@ def evaluate(meta_model, test_loader, n_way, k_shot, q_query, inner_lr, inner_st
             
             x_query   = data[:, k_shot:].contiguous().view(-1, 3, 84, 84)
             y_query   = torch.arange(n_way).repeat_interleave(q_query).to(device)
+            
+             # --- MEASURE TIME (ADAPTATION + INFERENCE) ---
+            # Esto mide: Generar Pesos (Adaptación) + Forward Query (Inferencia)
+            timer = CudaTimer(device)
+            timer.start()
             
             # --- 2. CLONE & FINE-TUNE ---
             fast_model = copy.deepcopy(meta_model)
@@ -108,9 +143,13 @@ def evaluate(meta_model, test_loader, n_way, k_shot, q_query, inner_lr, inner_st
             correct = (preds == y_query).sum().item()
             total = y_query.size(0)
             
+            timer.stop()
             total_acc += correct / total
+            adapt_times_ms.append(timer.get_time_ms())
+            mean_time = np.mean(adapt_times_ms)
+                
 
-    return total_acc / len(test_loader)
+    return total_acc / len(test_loader), mean_time
 
 def train_reptile(meta_model, train_loader, test_loader, val_loader, device, n_way, n_shot, n_query):
     wandb.login(key="93d025aa0577b011c6d4081b9d4dc7daeb60ee6b")
@@ -131,9 +170,10 @@ def train_reptile(meta_model, train_loader, test_loader, val_loader, device, n_w
     print(f"Starting Training: {MAX_EPOCHS} Epochs x {EPISODES_PER_EPOCH} Episodes = {MAX_EPOCHS*EPISODES_PER_EPOCH} Total Episodes")
     
     best_val_acc = 0.0
-    
+    total_train_time = 0.0
+    timer_global = CudaTimer(device) # Timer para medir tiempo total de entrenamiento
     for epoch in range(1, MAX_EPOCHS + 1):
-        
+        timer_global.start()
         # A. TRAIN ONE EPOCH
         avg_loss = train_epoch(
             meta_model, train_loader, val_loader,
@@ -141,10 +181,18 @@ def train_reptile(meta_model, train_loader, test_loader, val_loader, device, n_w
             INNER_LR, INNER_STEPS, EPSILON, device
         )
         
-        wandb.log({"train/loss": avg_loss, "epoch": epoch})
+        timer_global.stop()
+        epoch_duration_sec = timer_global.get_time_sec()
+        total_train_time += epoch_duration_sec
+        wandb.log({
+        "train/loss": avg_loss, 
+        "epoch": epoch, 
+        "time_per_epoch_sec": epoch_duration_sec, 
+        "total_train_time_min": total_train_time / 60.0})
+         
         # B. VALIDATE EVERY X EPOCHS
         if epoch % 5 == 0:
-            val_acc = evaluate(
+            val_acc, _ = evaluate(
                 meta_model, val_loader, 
                 n_way, n_shot, n_query, 
                 INNER_LR, INNER_STEPS, device
@@ -164,12 +212,14 @@ def train_reptile(meta_model, train_loader, test_loader, val_loader, device, n_w
     print("\n--- Training Finished. Running Final Test ---")
     meta_model.load_state_dict(torch.load(f"Results/Models_pth/Reptile_pth/reptile-gen-{n_way}-{n_shot}-da.pth"))
     
-    test_acc = evaluate(
+    test_acc, mean_time = evaluate(
         meta_model, test_loader, 
         n_way, n_shot, n_query, 
         INNER_LR, INNER_STEPS, device
     )
     wandb.log({"test/accuracy": test_acc})
     print(f"Final Test Accuracy: {test_acc*100:.2f}%")
+    wandb.log({"test/mean_adaptation_time_ms": mean_time})
+    print(f"Mean Adaptation + Inference Time per Episode: {mean_time:.8f} milseconds")
 
     wandb.finish()
